@@ -35,7 +35,6 @@
     <th><a href="{{ url_for('admin_professores') }}?{{ fl_query }}&ordem=nome">Nome{{ ' ▾' if ordem == 'nome' }}</a></th>
     <th>ID Lattes</th><th>Última atualização (Lattes)</th><th>Importado em</th><th>Versão no Lattes</th><th>Status</th>
     <th class="num"><a href="{{ url_for('admin_professores') }}?{{ fl_query }}&ordem=pontos">Pontos{{ ' ▾' if ordem == 'pontos' }}</a></th>
-    <th>Progressão</th>
     <th></th></tr></thead>
   <tbody>
   {% for p in profs %}
@@ -63,15 +62,14 @@
       <td>{{ p.importado_em|fmt_dt }}</td>
       <td>{{ p.remota_atualizacao or '—' }}</td>
       <td><span class="pill {{ st }}">{{ {'atualizado':'Atualizado','desatualizado':'Desatualizado','desconhecido':'Não verificado'}[st] }}</span></td>
-      <td class="num"><b>{{ '%.1f'|format(p.sit.total) }}</b>{% if p.sit.excedente_i > 0 %}<div class="muted small" title="Grupo I limitado a 50% da pontuação necessária">bruto {{ '%.1f'|format(p.total) }}</div>{% endif %}</td>
-      <td>{% if p.sit.definido %}<span class="pill {{ 'atualizado' if p.sit.ok else 'pendente' }}">{{ '✓ atingiu' if p.sit.ok else '✗ não atingiu' }}</span>{% else %}<span class="muted small">—</span>{% endif %}</td>
-      <td class="row-actions acoes-col">
+      <td class="num"><b>{{ '%.1f'|format(p.sit.total) }}</b>{% if p.sit.excedente_i > 0 %}<div class="muted small" title="Grupo I limitado a 50% da pontuação total">bruto {{ '%.1f'|format(p.total) }}</div>{% endif %}</td>
+      <td class="acoes-col"><div class="acoes-prof">
         <form method="post" action="{{ url_for('professor_atualizar', pid=p.id) }}"><button class="btn tiny">Reimportar</button></form>
         <form method="post" action="{{ url_for('admin_remover', pid=p.id) }}" onsubmit="return confirm('Remover {{ p.nome }}?')"><button class="btn tiny danger">Remover</button></form>
-      </td>
+      </div></td>
     </tr>
   {% else %}
-    <tr><td colspan="9" class="muted">Nenhum professor importado. <a href="{{ url_for('admin_importar') }}">Importar agora.</a></td></tr>
+    <tr><td colspan="8" class="muted">Nenhum professor importado. <a href="{{ url_for('admin_importar') }}">Importar agora.</a></td></tr>
   {% endfor %}
   </tbody>
 </table>

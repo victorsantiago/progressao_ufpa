@@ -247,3 +247,9 @@ label.inline input[type=month],.anos input[type=month]{width:160px}
 .tb-regra{background:rgba(255,255,255,.14);border-radius:8px;padding:6px 10px}
 .grafico-modo{display:flex;gap:6px;flex-wrap:wrap}
 .grafico-modo .chip-btn.active{background:var(--pri-d);border-color:var(--pri-d);color:#fff}
+/* lista de professores: botões empilhados dentro de um bloco (a célula continua sendo célula de tabela) */
+.acoes-col{display:table-cell;width:1%;white-space:nowrap;vertical-align:top}
+.acoes-prof{display:flex;flex-direction:column;gap:6px;align-items:stretch}
+.acoes-prof form{margin:0}
+.acoes-prof .btn{display:block;width:100%;text-align:center}
+.tabela-prof td.num .small{white-space:nowrap}

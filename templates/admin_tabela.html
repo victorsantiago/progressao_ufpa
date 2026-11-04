@@ -5,8 +5,6 @@
   <input type="hidden" name="grupo" id="grupo-atual" value="{{ grupo_ativo }}">
   <div class="tabela-topo sticky-save">
     <div class="actions"><button class="btn primary" type="submit" name="acao" value="salvar">Salvar valores</button>
-      <label class="min-total" title="Usada na regra do Grupo I: a pontuação de ensino não pode exceder 50% da pontuação necessária para a progressão. Em branco = regra não aplicada.">Pontuação necessária para a progressão
-        <input type="number" step="0.5" min="0" name="pontuacao_necessaria" value="{{ '%g'|format(pont_necessaria) if pont_necessaria is not none else '' }}" placeholder="ex.: 200"></label>
       <span id="aviso-ordem" class="small aviso-ordem" hidden>Ordem alterada — clique em Salvar valores para gravar.</span></div>
     <div class="actions">
       <input type="search" id="busca" placeholder="Filtrar itens em todos os grupos…" class="busca">
@@ -89,7 +87,7 @@
     <i>por ano</i> — conta os anos de duração dentro do interstício; <i>por semestre</i> — conta 2 por ano de duração dentro do interstício.
     “Alimentado por” mostra os itens do Lattes ligados a cada item (ajustável em <a href="{{ url_for('admin_mapeamento') }}">Mapeamento</a>).
     Grupos do Anexo I podem ser renomeados; grupos criados por você também podem ser removidos.
-    <b>Pontuação necessária</b>: informa o total exigido para a progressão; o Grupo I (ensino) é limitado a 50% desse valor no cálculo do total.</p>
+    O Grupo I (ensino) é limitado a 50% da pontuação total no cálculo.</p>
 </form>
 {% endblock %}
 {% block scripts %}
@@ -126,7 +124,7 @@ document.querySelectorAll('input[name^=grupo_nome__]').forEach(i => i.addEventLi
 document.querySelector('input[name=novo_grupo_nome]').addEventListener('keydown', e => {
   if (e.key === 'Enter') { e.preventDefault(); document.querySelector('button[value=add_grupo]').click(); }
 });
-document.querySelectorAll('.tabela-edit input, .tabela-edit textarea, .tabela-edit select, .grupo-nome input, .min-total input').forEach(el => {
+document.querySelectorAll('.tabela-edit input, .tabela-edit textarea, .tabela-edit select, .grupo-nome input').forEach(el => {
   const ini = el.value; const f = () => el.classList.toggle('changed', el.value !== ini);
   el.addEventListener('input', f); el.addEventListener('change', f);
 });

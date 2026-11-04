@@ -28,8 +28,8 @@
 </div>
 
 <div class="tabs">
-  <button class="tab {{ 'active' if aba == 'curriculo' }}" data-tab="curriculo">Currículo</button>
   <button class="tab {{ 'active' if aba == 'pontuacao' }}" data-tab="pontuacao">Pontuação</button>
+  <button class="tab {{ 'active' if aba == 'curriculo' }}" data-tab="curriculo">Currículo</button>
 </div>
 
 <!-- ===================== ABA CURRÍCULO ===================== -->
@@ -81,34 +81,15 @@
   <div class="total-banner">
     <div class="tb-topo">
       <div><div class="tb-rot">Total considerado</div><div class="tb-v">{{ '%.1f'|format(sit.total) }} <span>pontos</span></div></div>
-      {% if sit.definido %}
-      <div class="tb-situacao {{ 'apto' if sit.ok else 'pendente' }}" role="status">
-        <span class="tb-icone" aria-hidden="true">{{ '✓' if sit.ok else '!' }}</span>
-        <span>{{ 'Atingiu a pontuação necessária' if sit.ok else 'Ainda não atingiu a pontuação necessária' }}</span>
-      </div>
-      {% endif %}
       <div class="tb-ctx">{{ descreve_filtros(fl) }}</div>
-    </div>
-    {% if sit.definido %}
-    <div class="tb-meta">
-      <div class="tb-barra" role="progressbar" aria-valuemin="0" aria-valuemax="{{ sit.necessaria }}" aria-valuenow="{{ sit.total }}">
-        <div class="tb-barra-v" style="width: {{ '%.1f'|format(sit.pct) }}%"></div>
-      </div>
-      <div class="tb-meta-txt">
-        Necessário: <b>{{ '%g'|format(sit.necessaria) }}</b> pontos ·
-        {% if sit.ok %}<b>✓ atingido</b>{% if sit.total > sit.necessaria %} (+{{ '%.1f'|format(sit.total - sit.necessaria) }}){% endif %}
-        {% else %}faltam <b>{{ '%.1f'|format(sit.falta) }}</b>{% endif %}
-      </div>
     </div>
     {% if sit.considera_i %}
     <div class="tb-meta-txt tb-regra">
-      Grupo I (ensino) limitado a 50% da pontuação necessária ({{ '%g'|format(sit.teto_i) }} pts):
-      {% if sit.excedente_i > 0 %}obteve {{ '%.1f'|format(sit.grupo_i) }}, considerados <b>{{ '%.1f'|format(sit.grupo_i_considerado) }}</b> (−{{ '%.1f'|format(sit.excedente_i) }}).
-      {% else %}obteve {{ '%.1f'|format(sit.grupo_i) }}, dentro do limite.{% endif %}
+      <b>Grupo I (ensino)</b> limitado a 50% da pontuação total:
+      {% if sit.excedente_i > 0 %}obteve {{ '%.1f'|format(sit.grupo_i) }}, considerados <b>{{ '%.1f'|format(sit.grupo_i_considerado) }}</b>
+        (igual à soma dos demais grupos, {{ '%.1f'|format(sit.demais) }}; −{{ '%.1f'|format(sit.excedente_i) }} pts).
+      {% else %}{{ '%.1f'|format(sit.grupo_i) }} pts = {{ '%.1f'|format(sit.pct_i) }}% do total, dentro do limite.{% endif %}
     </div>
-    {% endif %}
-    {% else %}
-    <div class="tb-meta-txt tb-sem-min">Pontuação necessária não informada. O admin define em Gestão → Tabela de valores (usada também para limitar o Grupo I a 50%).</div>
     {% endif %}
   </div>
 
