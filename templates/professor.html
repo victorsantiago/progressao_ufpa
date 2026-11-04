@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ cv.dados.nome }}{% endblock %}
 {% block content %}
+{% set filtro = pont.filtro %}
 <div class="profile-head">
   <div class="avatar big">{{ cv.dados.nome[:1] }}</div>
   <div class="profile-info">
@@ -10,18 +11,22 @@
       · <a href="{{ url_for('professor_xml', pid=prof.id) }}">XML</a></div>
     <div class="muted small">Lattes atualizado em <b>{{ prof.data_atualizacao_br }}</b> · importado em {{ prof.importado_em|fmt_dt }}
       · <span id="verif-info">{% if prof.verificado_em %}verificado no eLattes em {{ prof.verificado_em|fmt_dt }}{% else %}ainda não verificado no eLattes{% endif %}</span></div>
-    <div class="score-badge">Pontuação total: <b>{{ '%.1f'|format(pont.total) }}</b> pontos</div>
+    <div class="score-badge"><b>{{ '%.1f'|format(pont.total) }}</b> pontos <span class="score-ctx">{{ descreve_filtros(fl) }}</span></div>
   </div>
   <div class="profile-actions">
     <form method="post" action="{{ url_for('professor_atualizar', pid=prof.id) }}" id="form-atualizar">
       <button type="submit" id="btn-status" class="btn-status {{ status }}" {% if status == 'atualizado' %}disabled{% endif %}>
-        {% if status == 'atualizado' %}✓ Currículo Atualizado{% elif status == 'desatualizado' %}⟳ Atualizar{% else %}⟳ Atualizar{% endif %}
+        {% if status == 'atualizado' %}✓ Currículo Atualizado{% else %}⟳ Atualizar{% endif %}
       </button>
     </form>
     <div class="small muted" id="btn-hint">
       {% if status == 'desatualizado' %}Nova versão no Lattes: {{ prof.remota_atualizacao }}{% elif status == 'desconhecido' %}Verificando no eLattes…{% endif %}
     </div>
   </div>
+</div>
+
+<div class="box filtros-box">
+  {% with filtros_action=url_for('professor', pid=prof.id), filtros_hidden={'aba': aba} %}{% include "_filtros.html" %}{% endwith %}
 </div>
 
 <div class="tabs">
@@ -31,6 +36,7 @@
 
 <!-- ===================== ABA CURRÍCULO ===================== -->
 <section id="tab-curriculo" class="tab-panel {{ 'active' if aba == 'curriculo' }}">
+  {% if filtro %}<p class="aviso small">Itens fora do interstício {{ fl.ini or '…' }}–{{ fl.fim or '…' }} aparecem esmaecidos.</p>{% endif %}
   {% if cv.dados.resumo %}<div class="box"><h3>Resumo</h3><p class="resumo">{{ cv.dados.resumo }}</p></div>{% endif %}
   {% if cv.dados.areas %}<div class="box"><h3>Áreas de atuação</h3><ul class="plain">{% for a in cv.dados.areas %}<li>{{ a }}</li>{% endfor %}</ul></div>{% endif %}
   {% if cv.dados.idiomas %}<div class="box"><h3>Idiomas</h3><ul class="plain">{% for i in cv.dados.idiomas %}<li><b>{{ i.idioma }}</b> — compreende {{ i.compreensao|lower }}, fala {{ i.fala|lower }}, lê {{ i.leitura|lower }}, escreve {{ i.escrita|lower }}</li>{% endfor %}</ul></div>{% endif %}
@@ -44,7 +50,9 @@
     <h3>{{ s.titulo }} <span class="count">{{ s.registros|length }}</span></h3>
     <ol class="registros">
       {% for r in s.registros %}
-      <li class="reg">
+      {% set lo = fl.ini or -999999 %}{% set hi = fl.fim or 999999 %}
+      {% set fora = filtro and (r.ini is none or r.ini > hi or r.fim < lo) %}
+      <li class="reg {{ 'fora' if fora }}">
         <div class="reg-main">
           <span class="reg-ano">{{ r.ano or '—' }}</span>
           <div>
@@ -55,9 +63,11 @@
             {% if det %}<details class="reg-det"><summary>detalhes</summary><dl>{% for k, v in det %}<dt>{{ k }}</dt><dd>{{ v }}</dd>{% endfor %}</dl></details>{% endif %}
           </div>
         </div>
-        {% if r.categoria and pontos_cat[r.categoria].item_key %}
+        {% if fora %}
+          <span class="reg-pts none">fora do interstício</span>
+        {% elif r.categoria and pontos_cat.get(r.categoria) and pontos_cat[r.categoria].item_key %}
           {% set l = pontos_cat[r.categoria] %}
-          <span class="reg-pts" title="{{ l.item_key }} – {{ l.item_atividade }}">{{ l.item_key }} · {{ '%g'|format(l.valor) }} pt{% if l.qtd != l.registros|length %}/un{% endif %}</span>
+          <span class="reg-pts {{ 'off' if not l.incluido }}" title="{{ l.item_key }} – {{ l.item_atividade }}{{ ' (grupo fora da análise)' if not l.incluido }}">{{ l.item_key }} · {{ '%g'|format(l.valor) }} pt</span>
         {% elif r.categoria %}
           <span class="reg-pts none" title="Categoria sem item mapeado">não pontua</span>
         {% endif %}
@@ -72,26 +82,36 @@
 <section id="tab-pontuacao" class="tab-panel {{ 'active' if aba == 'pontuacao' }}">
   <div class="totais">
     {% for g, nome in GRUPOS.items() %}
-    <div class="total-card"><div class="tc-g">Grupo {{ g }}</div><div class="tc-v">{{ '%.1f'|format(pont.totais_grupo[g]) }}</div><div class="tc-n">{{ nome }}</div></div>
+    {% set inc = g in fl.grupos %}
+    <div class="total-card {{ '' if inc else 'excluido' }}" title="{{ 'Considerado na análise' if inc else 'Fora da análise' }}">
+      <div class="tc-g">Grupo {{ g }}{% if not inc %} · fora{% endif %}</div>
+      <div class="tc-v">{{ '%.1f'|format(pont.totais_grupo[g]) }}</div>
+      <div class="tc-n">{{ nome }}</div>
+    </div>
     {% endfor %}
-    <div class="total-card geral"><div class="tc-g">Total</div><div class="tc-v">{{ '%.1f'|format(pont.total) }}</div><div class="tc-n">pontos (todos os grupos)</div></div>
+    <div class="total-card geral"><div class="tc-g">Total considerado</div><div class="tc-v">{{ '%.1f'|format(pont.total) }}</div><div class="tc-n">{{ descreve_filtros(fl) }}</div></div>
   </div>
-  <p class="muted small">Pontuação calculada automaticamente a partir do XML do Lattes, com os valores e o mapeamento definidos na camada de gestão. Itens sem correspondência no Lattes (ex.: carga horária de aulas) devem ser comprovados à parte.</p>
+  <p class="muted small">Calculado a partir do XML do Lattes com os valores e o mapeamento da gestão. {% if filtro %}Só entram registros cujo período intercepta o interstício; itens contados por ano consideram apenas os anos dentro dele. {% endif %}Grupos desmarcados aparecem para referência, mas não somam no total. Itens sem correspondência no Lattes (ex.: carga horária de aulas) devem ser comprovados à parte.</p>
 
   {% for g, nome in GRUPOS.items() %}
   {% set linhas = por_grupo[g] %}
-  <div class="box">
-    <h3>Grupo {{ g }} — {{ nome }} <span class="count">{{ '%.1f'|format(pont.totais_grupo[g]) }} pts</span></h3>
-    {% if not linhas %}<p class="muted">Nenhum item do Lattes mapeado para este grupo.</p>{% else %}
+  {% set inc = g in fl.grupos %}
+  <div class="box {{ '' if inc else 'grupo-off' }}">
+    <h3>Grupo {{ g }} — {{ nome }} <span class="count">{{ '%.1f'|format(pont.totais_grupo[g]) }} pts</span>{% if not inc %} <span class="pill desconhecido">fora da análise</span>{% endif %}</h3>
+    {% if not linhas %}<p class="muted">Nenhum item do Lattes neste grupo.</p>{% else %}
     <table class="tabela">
       <thead><tr><th>Item do Lattes</th><th>Item da tabela</th><th class="num">Qtd.</th><th class="num">Valor</th><th class="num">Pontos</th></tr></thead>
       <tbody>
       {% for l in linhas %}
-        <tr class="{{ 'zero' if not l.item_key }}">
+        <tr class="{{ 'zero' if (not l.item_key or l.qtd == 0) }}">
           <td>
             <details><summary>{{ l.label }}</summary>
-              <ul class="plain small">{% for r in l.registros %}<li>{{ r }}</li>{% endfor %}</ul>
+              <ul class="plain small">
+                {% for r in l.registros %}<li>{{ r.desc }}{% if l.modo == 'years' %} <span class="muted">— {{ '%g'|format(r.qtd_considerada) }} ano(s){% if filtro %} no interstício{% endif %}</span>{% endif %}</li>{% endfor %}
+                {% for r in l.registros_fora %}<li class="fora-li">{{ r.desc }} <span class="muted">— {{ r.motivo }}</span></li>{% endfor %}
+              </ul>
             </details>
+            {% if l.registros_fora %}<div class="small muted">{{ l.registros|length }} no interstício · {{ l.registros_fora|length }} fora</div>{% endif %}
           </td>
           <td class="small">{% if l.item_key %}<b>{{ l.item_key }}</b> {{ l.item_atividade }}{% else %}<i class="muted">não pontua</i>{% endif %}</td>
           <td class="num">{{ '%g'|format(l.qtd) }}</td>
@@ -111,7 +131,8 @@
 document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
   document.querySelectorAll('.tab, .tab-panel').forEach(e => e.classList.remove('active'));
   t.classList.add('active'); document.getElementById('tab-' + t.dataset.tab).classList.add('active');
-  history.replaceState(null, '', '?aba=' + t.dataset.tab);
+  const u = new URL(location.href); u.searchParams.set('aba', t.dataset.tab); history.replaceState(null, '', u);
+  const h = document.querySelector('.filtros input[name=aba]'); if (h) h.value = t.dataset.tab;
 }));
 // Verifica no eLattes se há versão mais nova e ajusta o botão
 (async () => {

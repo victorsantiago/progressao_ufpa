@@ -3,15 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block title %}Lattes UFPA{% endblock %} · Lattes UFPA</title>
+<title>{% block title %}Início{% endblock %} · {{ APP_NOME }}</title>
+<link rel="icon" href="{{ url_for('favicon') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
 <header class="topbar">
   <div class="wrap">
-    <a class="brand" href="{{ url_for('index') }}"><span class="logo">L</span> Lattes <b>UFPA</b> <small>· pontuação docente</small></a>
+    <a class="brand" href="{{ url_for('index') }}">
+      {% if tem_logo %}<img class="brand-logo" src="{{ url_for('logo') }}" alt="UFPA">{% else %}<span class="logo">P</span>{% endif %}
+      <span class="brand-txt"><span class="brand-nome">{{ APP_NOME }}</span><span class="brand-sub">{{ APP_SUB }} · progressão funcional docente</span></span>
+    </a>
     <nav>
-      <a href="{{ url_for('index') }}">Professores</a>
+      <a href="{{ url_for('index') }}" class="{{ 'active' if request.endpoint in ('index', 'professor') }}">Professores</a>
       {% if session.get('admin') %}
         <a href="{{ url_for('admin_professores') }}" class="{{ 'active' if request.path.startswith('/admin') }}">Gestão</a>
         <a href="{{ url_for('admin_logout') }}">Sair</a>
@@ -36,7 +40,7 @@
   {% endwith %}
   {% block content %}{% endblock %}
 </main>
-<footer class="wrap foot">Fonte dos dados: Plataforma Lattes/CNPq via eLattes UFPA · Tabela: Anexo I – Quadro de Atividades Referenciais</footer>
+<footer class="wrap foot">{{ APP_NOME }} ({{ APP_SUB }}) · Fonte: Plataforma Lattes/CNPq via eLattes UFPA · Tabela: Anexo I – Quadro de Atividades Referenciais</footer>
 {% block scripts %}{% endblock %}
 </body>
 </html>

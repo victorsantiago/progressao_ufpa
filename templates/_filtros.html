@@ -1,0 +1,43 @@
+{# Formulário de filtros da análise. Espera: fl, filtros_action, filtros_hidden (dict opcional) #}
+<form class="filtros" method="get" action="{{ filtros_action }}">
+  <input type="hidden" name="f" value="1">
+  {% for k, v in (filtros_hidden or {}).items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+  <div class="filtros-linha">
+    <div class="filtro-bloco">
+      <span class="filtro-rot">Interstício avaliado</span>
+      <div class="anos">
+        <label class="inline">de <input type="number" name="ini" min="1950" max="2100" placeholder="início" value="{{ fl.ini or '' }}"></label>
+        <label class="inline">a <input type="number" name="fim" min="1950" max="2100" placeholder="fim" value="{{ fl.fim or '' }}"></label>
+      </div>
+      <div class="presets">
+        <button type="button" class="chip-btn" data-ini="{{ ANO_ATUAL - 2 }}" data-fim="{{ ANO_ATUAL }}">{{ ANO_ATUAL - 2 }}–{{ ANO_ATUAL }}</button>
+        <button type="button" class="chip-btn" data-ini="{{ ANO_ATUAL - 1 }}" data-fim="{{ ANO_ATUAL }}">{{ ANO_ATUAL - 1 }}–{{ ANO_ATUAL }}</button>
+        <button type="button" class="chip-btn" data-ini="" data-fim="">Todo o currículo</button>
+      </div>
+    </div>
+    <div class="filtro-bloco">
+      <span class="filtro-rot">Grupos considerados</span>
+      <div class="grupos-check">
+        {% for g, nome in GRUPOS.items() %}
+        <label class="gchk" title="{{ nome }}"><input type="checkbox" name="g" value="{{ g }}" {{ 'checked' if g in fl.grupos }}><span>{{ g }}</span></label>
+        {% endfor %}
+        <button type="button" class="link-btn" data-todos="1">todos</button>
+        <button type="button" class="link-btn" data-todos="0">nenhum</button>
+      </div>
+    </div>
+    <div class="filtro-acoes">
+      <button class="btn primary" type="submit">Aplicar</button>
+    </div>
+  </div>
+</form>
+<script>
+(function () {
+  const f = document.currentScript.previousElementSibling;
+  f.querySelectorAll('.chip-btn').forEach(b => b.addEventListener('click', () => {
+    f.ini.value = b.dataset.ini; f.fim.value = b.dataset.fim; f.submit();
+  }));
+  f.querySelectorAll('.link-btn').forEach(b => b.addEventListener('click', () => {
+    f.querySelectorAll('input[name=g]').forEach(c => c.checked = b.dataset.todos === '1');
+  }));
+})();
+</script>

@@ -330,37 +330,76 @@ CATEGORIAS = [
 CATEGORIAS_MAP = {c[0]: {"key": c[0], "label": c[1], "grupo": c[2], "item_padrao": c[3], "modo": c[4]} for c in CATEGORIAS}
 
 
-def calcular_pontuacao(categorias_qtd, itens_por_key, mapeamento):
+def _registro(rec):
+    if isinstance(rec, dict):
+        return rec
+    return {"desc": str(rec), "qtd": 1.0, "ini": None, "fim": None}  # formato antigo
+
+
+def calcular_pontuacao(categorias_qtd, itens_por_key, mapeamento, ano_ini=None, ano_fim=None, grupos=None):
     """
-    categorias_qtd: {categoria_key: {"qtd": float, "registros": [...]}}
+    categorias_qtd: {categoria_key: {"qtd": float, "registros": [{"desc","qtd","ini","fim"}]}}
     itens_por_key: {item_key: {"valor": float, "atividade": str, "grupo": str, ...}}
     mapeamento: {categoria_key: item_key or None}
-    Retorna dict com linhas por categoria, totais por grupo e total geral.
+    ano_ini/ano_fim: interstício avaliado (None = todo o período). Um registro entra se o seu
+        período intercepta o interstício; itens "por ano" contam só os anos dentro dele.
+    grupos: grupos considerados na análise (None = todos).
     """
+    filtro = ano_ini is not None or ano_fim is not None
+    lo = ano_ini if ano_ini is not None else -10**9
+    hi = ano_fim if ano_fim is not None else 10**9
+    grupos = set(grupos) if grupos is not None else set(GRUPOS)
+
     linhas = []
     totais_grupo = {g: 0.0 for g in GRUPOS}
     total = 0.0
     for cat in CATEGORIAS:
         ckey = cat[0]
-        info = categorias_qtd.get(ckey)
-        qtd = float(info["qtd"]) if info else 0.0
+        modo = CATEGORIAS_MAP[ckey]["modo"]
+        info = categorias_qtd.get(ckey) or {"registros": []}
+        dentro, fora = [], []
+        qtd = 0.0
+        for rec in map(_registro, info["registros"]):
+            ini, fim = rec.get("ini"), rec.get("fim")
+            if not filtro:
+                q = float(rec.get("qtd") or 0)
+            elif ini is None:
+                fora.append(dict(rec, motivo="sem ano informado"))
+                continue
+            elif max(ini, lo) > min(fim, hi):
+                fora.append(dict(rec, motivo="fora do interstício"))
+                continue
+            elif modo == "years":
+                q = float(min(fim, hi) - max(ini, lo) + 1)
+            else:
+                q = float(rec.get("qtd") or 0)
+            qtd += q
+            dentro.append(dict(rec, qtd_considerada=q))
+        if not dentro and not fora:
+            continue
         item_key = mapeamento.get(ckey, CATEGORIAS_MAP[ckey]["item_padrao"])
         item = itens_por_key.get(item_key) if item_key else None
         valor = float(item["valor"]) if item else 0.0
-        pontos = qtd * valor if item else 0.0
         grupo = item["grupo"] if item else CATEGORIAS_MAP[ckey]["grupo"]
+        incluido = grupo in grupos
+        pontos = qtd * valor if item else 0.0
         if item:
             totais_grupo[grupo] += pontos
-            total += pontos
+            if incluido:
+                total += pontos
         linhas.append({
             "categoria": ckey,
             "label": CATEGORIAS_MAP[ckey]["label"],
+            "modo": modo,
             "qtd": qtd,
             "item_key": item_key,
             "item_atividade": item["atividade"] if item else "— não pontua —",
             "valor": valor,
             "pontos": pontos,
             "grupo": grupo,
-            "registros": info["registros"] if info else [],
+            "incluido": incluido,
+            "registros": dentro,
+            "registros_fora": fora,
         })
-    return {"linhas": linhas, "totais_grupo": totais_grupo, "total": total}
+    return {"linhas": linhas, "totais_grupo": totais_grupo, "total": total,
+            "grupos": sorted(grupos, key=list(GRUPOS).index), "ano_ini": ano_ini, "ano_fim": ano_fim, "filtro": filtro}

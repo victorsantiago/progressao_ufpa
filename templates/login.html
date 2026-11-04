@@ -2,7 +2,7 @@
 {% block title %}Entrar{% endblock %}
 {% block content %}
 <div class="login-box">
-  <h1>Camada de gestão</h1>
+  <h1>Gestão</h1><p class="muted small" style="margin-top:-8px">{{ APP_NOME }} ({{ APP_SUB }})</p>
   {% if erro %}<div class="flash erro">{{ erro }}</div>{% endif %}
   <form method="post">
     <label>Usuário<input name="usuario" value="admin" autofocus></label>

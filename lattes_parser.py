@@ -14,6 +14,23 @@ import xml.etree.ElementTree as ET
 from scoring import CATEGORIAS_MAP
 
 ANO_ATUAL = dt.date.today().year
+PARSER_VERSAO = 2
+
+_RE_PERIODO = re.compile(r"\((\d{4})(\s*[–-]\s*(\d{4}|atual)?)?\)")
+
+
+def _extrair_periodo(texto):
+    """Último '(AAAA)' ou '(AAAA – AAAA|atual)' do texto -> (ini, fim) ou (None, None)."""
+    m = _RE_PERIODO.findall(texto or "")
+    if not m:
+        return None, None
+    ini, traco, fim = m[-1]
+    ini = int(ini)
+    if traco:
+        fim = int(fim) if fim.isdigit() else ANO_ATUAL
+    else:
+        fim = ini
+    return ini, max(ini, fim)
 
 
 def _attrs(elem):
@@ -110,14 +127,17 @@ class Curriculo:
         return s
 
     def _add_cat(self, cat, descricao, qtd=1.0):
+        """Registra um item pontuável. O período (ano inicial/final) é lido do
+        último '(AAAA)' ou '(AAAA – AAAA|atual)' da descrição."""
         if cat not in CATEGORIAS_MAP:
             raise KeyError(cat)
+        ini, fim = _extrair_periodo(descricao)
         c = self.categorias.setdefault(cat, {"qtd": 0.0, "registros": []})
         c["qtd"] += qtd
-        c["registros"].append(descricao)
+        c["registros"].append({"desc": descricao, "qtd": float(qtd), "ini": ini, "fim": fim})
 
     def to_dict(self):
-        return {"dados": self.dados, "secoes": self.secoes, "categorias": self.categorias}
+        return {"versao": PARSER_VERSAO, "dados": self.dados, "secoes": self.secoes, "categorias": self.categorias}
 
 
 def _decodificar(xml_bytes):
@@ -195,9 +215,13 @@ def parse_lattes_xml(xml_bytes):
 
 # ---------------------------------------------------------------------------
 def _reg(a, titulo=None, ano=None, subtitulo="", categoria=None, autores=None, detalhes=None):
+    ano = ano if ano is not None else _ano(a)
+    ini, fim = _extrair_periodo(f"({ano.strip()})" if ano else "")
     return {
         "titulo": titulo if titulo is not None else _titulo(a),
-        "ano": ano if ano is not None else _ano(a),
+        "ano": ano,
+        "ini": ini,
+        "fim": fim,
         "subtitulo": subtitulo,
         "categoria": categoria,
         "autores": autores or [],
@@ -280,13 +304,13 @@ def _atuacao(root, cv):
         for e in ap.iter("ESTAGIO"):
             a = _attrs(e)
             periodo = f"{a.get('ANO-INICIO', '')} – {a.get('ANO-FIM', '') or 'atual'}"
-            cv._add_cat("estagio_realizado", f"{a.get('ESTAGIO-REALIZADO', '')} – {inst}")
+            cv._add_cat("estagio_realizado", f"{a.get('ESTAGIO-REALIZADO', '')} – {inst} ({periodo})")
             sec["registros"].append(_reg(a, titulo=f"Estágio: {a.get('ESTAGIO-REALIZADO', '')}", ano=periodo, subtitulo=inst, categoria="estagio_realizado"))
         for t in ap.iter("TREINAMENTO-MINISTRADO"):
             a = _attrs(t)
             periodo = f"{a.get('ANO-INICIO', '')} – {a.get('ANO-FIM', '') or 'atual'}"
             tr = [x.text for x in t.findall("TREINAMENTO") if x.text]
-            cv._add_cat("treinamento_ministrado", f"{'; '.join(tr)} – {inst}", max(1, len(tr)))
+            cv._add_cat("treinamento_ministrado", f"{'; '.join(tr)} – {inst} ({periodo})", max(1, len(tr)))
             sec["registros"].append(_reg(a, titulo=f"Treinamento ministrado: {'; '.join(tr)}", ano=periodo, subtitulo=inst, categoria="treinamento_ministrado"))
 
 

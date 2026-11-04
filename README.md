@@ -1,4 +1,6 @@
-# Lattes UFPA – importação de currículos e pontuação para progressão docente
+# Progressão Automatizada UFPA (Lattes)
+
+Importação de currículos Lattes e pontuação para progressão funcional docente.
 
 Ferramenta web (Flask + SQLite) que:
 
@@ -16,6 +18,18 @@ Ferramenta web (Flask + SQLite) que:
    - Tabela de valores: o admin atribui o valor de cada um dos 175 itens (gradações como 24/12 viram variantes `.a/.b`);
    - Mapeamento Lattes → Tabela: define a qual item cada tipo de registro do Lattes é associado;
    - Exportação CSV da pontuação de todos os professores.
+
+## Análise por interstício e grupos
+
+- No perfil (aba **Pontuação**) e na lista da gestão há um filtro com **ano inicial/final do interstício**
+  e os **grupos (I–VIII) considerados**. Atalhos: últimos 2–3 anos e "todo o currículo".
+- Entra na análise todo registro cujo período intercepta o interstício; itens contados por ano
+  (projetos, cargos, revisão de periódico) contam só os anos dentro dele.
+- Grupos desmarcados continuam visíveis, mas não somam no total. Na aba Currículo, itens fora do
+  interstício aparecem esmaecidos.
+- O padrão (usado quando a página abre sem filtro) é definido em **Gestão → Configuração**; a exportação
+  CSV usa o filtro da tela.
+- A logo da UFPA é enviada em **Gestão → Configuração → Logo** e fica guardada no disco do servidor.
 
 ## Executar
 
