@@ -438,7 +438,7 @@ def calcular_pontuacao(categorias_qtd, itens_por_key, mapeamento, ano_ini=None, 
 # ---------------------------------------------------------------------------
 _FA = "DADOS-GERAIS › FORMACAO-ACADEMICA-TITULACAO › "
 _FC = "DADOS-COMPLEMENTARES › FORMACAO-COMPLEMENTAR › "
-_EV = "DADOS-COMPLEMENTARES › PARTICIPACAO-EM-EVENTOS-CONGRESSOS › PARTICIPACAO-EM-* (congresso, seminário, simpósio, oficina, encontro, outras)"
+_EV = "DADOS-COMPLEMENTARES › PARTICIPACAO-EM-EVENTOS-CONGRESSOS › PARTICIPACAO-EM-*"
 _OC = "OUTRA-PRODUCAO › ORIENTACOES-CONCLUIDAS › "
 _OA = "DADOS-COMPLEMENTARES › ORIENTACOES-EM-ANDAMENTO › "
 _BT = "DADOS-COMPLEMENTARES › PARTICIPACAO-EM-BANCA-TRABALHOS-CONCLUSAO › "
@@ -456,8 +456,8 @@ CATEGORIA_TAGS = {
     "form_especializacao": _FA + "ESPECIALIZACAO (STATUS-DO-CURSO=CONCLUIDO)",
     "form_curso_curta": _FC + "FORMACAO-COMPLEMENTAR-CURSO-DE-CURTA-DURACAO",
     "form_outros": _FC + "OUTROS (e demais formações complementares)",
-    "evento_participante": _EV + " — TIPO-PARTICIPACAO vazio ou ouvinte/participante",
-    "evento_palestrante": _EV + " — TIPO-PARTICIPACAO contém conferencista, palestrante, moderador, mesa, debatedor ou coordenador",
+    "evento_participante": _EV + " (TIPO-PARTICIPACAO vazio, ouvinte ou participante; congresso, seminário, simpósio, oficina, encontro e outras)",
+    "evento_palestrante": _EV + " (TIPO-PARTICIPACAO contém conferencista, palestrante, moderador, mesa, debatedor ou coordenador)",
     "orient_posdoc_concl": _OC + "ORIENTACOES-CONCLUIDAS-PARA-POS-DOUTORADO",
     "orient_doutorado_concl": _OC + "ORIENTACOES-CONCLUIDAS-PARA-DOUTORADO (TIPO-DE-ORIENTACAO=ORIENTADOR_PRINCIPAL)",
     "orient_mestrado_concl": _OC + "ORIENTACOES-CONCLUIDAS-PARA-MESTRADO (TIPO-DE-ORIENTACAO=ORIENTADOR_PRINCIPAL)",

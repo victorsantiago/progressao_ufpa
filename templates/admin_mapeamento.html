@@ -15,7 +15,12 @@
       <tbody>
       {% for c in cats %}
         <tr class="map-row" data-busca="{{ (c.label ~ ' ' ~ c.tags)|lower }}">
-          <td>{{ c.label }}<span class="tag-xml" title="Caminho no XML do Lattes">{{ c.tags }}</span></td>
+          <td>{{ c.label }}
+            {% set partes, cond = c.tags|tag_partes %}
+            <div class="tag-xml" title="Caminho no XML do Lattes">
+              {% for p in partes %}<code class="tag-seg">{{ p }}</code>{% if not loop.last %}<span class="tag-sep">›</span>{% endif %}{% endfor %}
+              {% if cond %}<span class="tag-cond">{{ cond }}</span>{% endif %}
+            </div></td>
           <td>
             <select name="map__{{ c.key }}" class="sel {{ 'sem-item' if not c.atual }}">
               <option value="">— não pontua —</option>

@@ -198,3 +198,8 @@ select.sel.sem-item{color:var(--muted);background:#fbf7f7}
 tr.movido td{animation:destaque 1.2s ease-out}
 @keyframes destaque{from{background:var(--pri-l)}to{background:transparent}}
 .aviso-ordem{color:var(--amber);font-weight:600;margin-left:10px}
+/* mapeamento: caminho da tag do Lattes em retângulos cinzas */
+.tag-xml{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin-top:6px;font-family:inherit;font-size:inherit;color:inherit}
+.tag-seg{display:inline-block;background:#eceef0;border:1px solid #dcdfe3;color:#3d4248;border-radius:5px;padding:2px 7px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;line-height:1.4}
+.tag-sep{color:#9aa0a6;font-size:12px}
+.tag-cond{display:inline-block;background:#f6f7f8;border:1px dashed #cfd3d8;color:#5b6168;border-radius:5px;padding:2px 7px;font-size:11.5px;line-height:1.4}

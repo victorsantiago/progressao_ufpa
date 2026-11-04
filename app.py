@@ -247,6 +247,24 @@ def regex_variante(codigo, grupo):
 
 
 app.jinja_env.filters["regex_variante"] = regex_variante
+
+
+def tag_partes(tags):
+    """'A › B › C (cond)' → (['A', 'B', 'C'], 'cond'). A condição começa no primeiro ' (' ou ' — ' do último trecho."""
+    partes = [p.strip() for p in (tags or "").split(" › ") if p.strip()]
+    cond = ""
+    if partes:
+        ult = partes[-1]
+        cortes = [i for i in (ult.find(" ("), ult.find(" — ")) if i > 0]
+        if cortes:
+            i = min(cortes)
+            partes[-1], cond = ult[:i].strip(), ult[i:].strip(" —")
+            if cond.startswith("(") and cond.endswith(")") and cond.count("(") == 1:
+                cond = cond[1:-1]
+    return partes, cond
+
+
+app.jinja_env.filters["tag_partes"] = tag_partes
 app.jinja_env.globals["inferir_genero"] = inferir_genero
 
 
