@@ -20,7 +20,7 @@
   <summary><b>⚠ {{ com_alerta|length }} currículo(s) com elementos que o XSD do Lattes ({{ XSD_VERSAO }}) não prevê</b>
     <span class="small muted">— o formato do Lattes pode ter mudado; algum item desses currículos pode não estar sendo lido nem pontuado.</span></summary>
   <table class="tabela small" style="margin-top:8px">
-    <thead><tr><th>Professor</th><th>Elemento ou atributo não previsto no XSD</th><th class="num">Ocorrências</th></tr></thead>
+    <thead><tr><th>Professor</th><th>Elemento não previsto no XSD</th><th class="num">Ocorrências</th></tr></thead>
     <tbody>
     {% for p in com_alerta %}{% for a in p.alertas_xsd %}
       <tr>{% if loop.first %}<td rowspan="{{ p.alertas_xsd|length }}"><a href="{{ url_for('professor', pid=p.id) }}?aba=curriculo">{{ p.nome }}</a></td>{% endif %}

@@ -630,7 +630,9 @@ def professor(pid):
         # primeiro grupo considerado que tenha pontos; senão o primeiro considerado; senão I
         grupo_ativo = next((g for g in fl["grupos"] if pont["totais_grupo"][g] > 0),
                            fl["grupos"][0] if fl["grupos"] else "I")
-    if request.args.get("grupo") == "__sem":
+    if not session.get("admin"):
+        nao_pontuam = []          # o agrupamento do que não pontua é só da gestão
+    elif request.args.get("grupo") == "__sem" and nao_pontuam:
         grupo_ativo = "__sem"
     return render_template("professor.html", prof=prof, cv=parsed, pont=pont, por_grupo=por_grupo, fl=fl, nao_pontuam=nao_pontuam,
                            fl_query=filtros_query(fl), pontos_cat=pontos_cat, status=status_atualizacao(prof),
@@ -761,7 +763,9 @@ def admin_professores():
     for p in db.execute("SELECT * FROM professores ORDER BY nome").fetchall():
         parsed, pont, _ = _montar_pontuacao(p, fl, itens, mapa)
         est = parsed.get("estrutura") or {}
-        alertas = est.get("elementos", []) + [dict(a, caminho=f"{a['caminho']} @{a['nome']}") for a in est.get("atributos", [])]
+        # só ELEMENTOS desconhecidos geram aviso: indicam um tipo de item que pode não estar sendo lido.
+        # Atributos novos (ex.: ID-OASIS, NRO-CERTIFICADO) são metadados da plataforma e não afetam a leitura.
+        alertas = est.get("elementos", [])
         profs.append({**dict(p), "total": pont["total"], "totais_grupo": pont["totais_grupo"], "sit": situacao(pont, fl, db),
                       "alertas_xsd": alertas})
     ordem = request.args.get("ordem", "nome")

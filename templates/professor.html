@@ -163,7 +163,7 @@
   <div class="gpanel box {{ 'active' if grupo_ativo == '__sem' }}" id="gpanel-__sem" role="tabpanel">
     <h3>Itens do Lattes que não pontuam <span class="count">{{ nao_pontuam|length }} tipo(s)</span></h3>
     <p class="muted small" style="margin-top:-4px">Registros do currículo cujo tipo não está ligado a nenhum item da tabela de valores, por isso não somam pontos.
-      {% if session.get('admin') %}Para fazê-los pontuar, ligue-os a um item em <a href="{{ url_for('admin_mapeamento', grupo='__sem') }}">Mapeamento Tabela → Lattes</a>.{% endif %}</p>
+      Para fazê-los pontuar, ligue-os a um item em <a href="{{ url_for('admin_mapeamento', grupo='__sem') }}">Mapeamento Tabela → Lattes</a>. <i>Visível só na gestão.</i></p>
     <table class="tabela">
       <thead><tr><th>Item do Lattes</th><th class="num">Registros{% if pont.filtro %} no interstício{% endif %}</th></tr></thead>
       <tbody>

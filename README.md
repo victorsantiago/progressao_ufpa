@@ -45,13 +45,13 @@ Ferramenta web (Flask + SQLite) que:
 ## Conferência com o XSD do Lattes
 
 O esquema oficial do Extrator Lattes (CNPq), versão de 12/09/2022, fica em `schema/CurriculoLattes_12_09_2022.xsd`.
-A cada importação o currículo é conferido contra ele: elementos ou atributos que o XSD não prevê (sinal de que o
-formato do Lattes mudou e de que algum item pode não estar sendo lido) aparecem num aviso no topo de
-Gestão › Professores e no status do professor (“⚠ fora do XSD”). Atributos que a exportação atual já envia e o XSD
-não declara (`PCD`, `ELETRONICO`, `OUTRA-FORMA-DE-CONTATO`, `REDE-SOCIAL`) não geram aviso.
+A cada importação o currículo é conferido contra ele: elementos que o XSD não prevê (sinal de que o formato do
+Lattes ganhou um tipo de item novo, que pode não estar sendo lido) aparecem num aviso no topo de
+Gestão › Professores e no status do professor (“⚠ fora do XSD”). Atributos novos (ex.: `ID-OASIS`, `PCD`,
+`NRO-CERTIFICADO`) são metadados da plataforma e não geram aviso.
 
 Todos os tipos de registro previstos no XSD são lidos. Os que não estão ligados a nenhum item da tabela aparecem no
-perfil, na aba “Itens do Lattes que não pontuam”, e na aba “Não pontuam” do Mapeamento, onde podem ser ligados.
+perfil (só para quem está na gestão), na aba “Itens do Lattes que não pontuam”, e na aba “Não pontuam” do Mapeamento, onde podem ser ligados.
 `python3 tests/test_xsd.py` confere essa cobertura e os alertas.
 
 ## Relatório em PDF
