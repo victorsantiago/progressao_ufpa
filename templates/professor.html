@@ -3,7 +3,7 @@
 {% block content %}
 {% set filtro = pont.filtro %}
 <div class="profile-head">
-  <div class="avatar big">{{ cv.dados.nome[:1] }}</div>
+  <div class="avatar big"><span>{{ cv.dados.nome[:1] }}</span>{% if fotos_on %}<img src="{{ url_for('professor_foto', pid=prof.id) }}" alt="Foto de {{ cv.dados.nome }}" onerror="this.remove()">{% endif %}</div>
   <div class="profile-info">
     <h1>{{ cv.dados.nome }}</h1>
     <div class="muted">ID Lattes {{ prof.id }}{% if cv.dados.orcid %} · ORCID {{ cv.dados.orcid }}{% endif %}

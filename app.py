@@ -19,6 +19,7 @@ import uuid
 from flask import (Flask, abort, flash, g, jsonify, redirect, render_template, request,
                    send_file, session, url_for)
 
+import fotos
 from elattes_client import ELattesClient, ELattesError, extrair_xmls
 from lattes_parser import PARSER_VERSAO, parse_lattes_xml
 from scoring import CATEGORIAS, CATEGORIAS_MAP, GRUPOS, calcular_pontuacao, tabela_itens
@@ -31,6 +32,7 @@ LOGO_MIME = {"png": "image/png", "svg": "image/svg+xml", "jpg": "image/jpeg", "j
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.environ.get("DATA_DIR") or os.path.join(BASE_DIR, "data")
 XML_DIR = os.path.join(DATA_DIR, "curriculos")
+FOTO_DIR = os.path.join(DATA_DIR, "fotos")
 DB_PATH = os.path.join(DATA_DIR, "app.db")
 os.makedirs(XML_DIR, exist_ok=True)
 
@@ -92,7 +94,11 @@ def init_db():
                     (it["atividade"], it["grupo"], it["numero"], it["variante"], it["valor_padrao"], it["ordem"], it["key"]))
     for c in CATEGORIAS:
         con.execute("INSERT OR IGNORE INTO mapeamento (categoria, item_key) VALUES (?,?)", (c[0], c[3]))
-    for chave, valor in (("elattes_url", "https://elattes.ufpa.br"), ("interst_ini", ""), ("interst_fim", ""),
+    cols = {r["name"] for r in con.execute("PRAGMA table_info(professores)")}
+    for col in ("id_k", "foto_tentativa"):
+        if col not in cols:
+            con.execute(f"ALTER TABLE professores ADD COLUMN {col} TEXT")
+    for chave, valor in (("elattes_url", "https://elattes.ufpa.br"), ("interst_ini", ""), ("interst_fim", ""), ("exibir_fotos", "1"),
                          ("grupos", ",".join(GRUPOS))):
         con.execute("INSERT OR IGNORE INTO config (chave, valor) VALUES (?, ?)", (chave, valor))
     con.commit()
@@ -200,7 +206,8 @@ def logo_path():
 
 @app.context_processor
 def _ctx():
-    return {"tem_logo": logo_path()[0] is not None, "ANO_ATUAL": dt.date.today().year}
+    return {"tem_logo": logo_path()[0] is not None, "ANO_ATUAL": dt.date.today().year,
+            "fotos_on": cfg("exibir_fotos", "1") == "1"}
 
 
 # ---------------------------------------------------------------------------
@@ -266,6 +273,12 @@ def salvar_curriculo(con, id_lattes, xml_bytes):
     pid = parsed["dados"].get("id") or id_lattes
     with open(os.path.join(XML_DIR, f"{pid}.xml"), "wb") as f:
         f.write(xml_bytes)
+    # currículo novo/atualizado: busca a foto de novo na próxima exibição
+    try:
+        os.remove(os.path.join(FOTO_DIR, f"{pid}.jpg"))
+    except OSError:
+        pass
+    con.execute("UPDATE professores SET foto_tentativa=NULL WHERE id=?", (pid,))
     d = parsed["dados"]
     con.execute("""INSERT INTO professores (id, nome, data_atualizacao, data_atualizacao_br, importado_em, dados_json)
                    VALUES (?,?,?,?,?,?)
@@ -679,6 +692,16 @@ def admin_config():
                         pass
                 arq.save(os.path.join(DATA_DIR, f"logo.{ext}"))
                 flash("Logo atualizada.", "ok")
+        elif acao == "fotos":
+            salvar("exibir_fotos", "1" if request.form.get("exibir_fotos") else "0")
+            if request.form.get("limpar"):
+                for f in os.listdir(FOTO_DIR) if os.path.isdir(FOTO_DIR) else []:
+                    try:
+                        os.remove(os.path.join(FOTO_DIR, f))
+                    except OSError:
+                        pass
+                db.execute("UPDATE professores SET foto_tentativa=NULL")
+            flash("Preferência de fotos salva.", "ok")
         elif acao == "remover_logo":
             for e in LOGO_EXTS:
                 try:
@@ -694,6 +717,52 @@ def admin_config():
         return redirect(url_for("admin_config"))
     return render_template("admin_config.html", elattes_url=cfg("elattes_url", "https://elattes.ufpa.br", db),
                            fl=filtros_padrao(db))
+
+
+FOTO_RETENTAR_HORAS = 24
+_foto_lock = threading.Lock()
+
+
+@app.route("/professor/<pid>/foto")
+def professor_foto(pid):
+    """Miniatura da foto do Lattes (cache em disco). 404 se desativado ou indisponível."""
+    if not re.fullmatch(r"\d{16}", pid) or cfg("exibir_fotos", "1") != "1":
+        abort(404)
+    destino = os.path.join(FOTO_DIR, f"{pid}.jpg")
+    if os.path.exists(destino):
+        return send_file(destino, mimetype="image/jpeg", max_age=86400)
+    db = get_db()
+    prof = db.execute("SELECT id, id_k, foto_tentativa FROM professores WHERE id=?", (pid,)).fetchone()
+    if not prof:
+        abort(404)
+    # evita bater no CNPq a cada visualização quando não há foto
+    if prof["foto_tentativa"]:
+        try:
+            ultima = dt.datetime.fromisoformat(prof["foto_tentativa"])
+            if (dt.datetime.now() - ultima).total_seconds() < FOTO_RETENTAR_HORAS * 3600:
+                abort(404)
+        except ValueError:
+            pass
+    with _foto_lock:
+        if os.path.exists(destino):
+            return send_file(destino, mimetype="image/jpeg", max_age=86400)
+        ok = False
+        id_k = prof["id_k"]
+        try:
+            if not id_k:
+                id_k = fotos.resolver_id_k(pid)
+                if id_k:
+                    db.execute("UPDATE professores SET id_k=? WHERE id=?", (id_k, pid))
+            if id_k:
+                ok = fotos.baixar_foto(id_k, destino)
+        except Exception:  # noqa – rede/serviço indisponível
+            ok = False
+        if not ok:
+            db.execute("UPDATE professores SET foto_tentativa=? WHERE id=?", (agora(), pid))
+        db.commit()
+    if not ok:
+        abort(404)
+    return send_file(destino, mimetype="image/jpeg", max_age=86400)
 
 
 @app.route("/logo")

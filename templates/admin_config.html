@@ -38,6 +38,17 @@
     </div>
 
     <div class="box">
+      <h3>Fotos dos professores</h3>
+      <p class="muted small">A foto vem do serviço oficial de fotos do CNPq (a mesma exibida no Lattes). É buscada na primeira visualização do perfil, reduzida e guardada no servidor; ao reimportar o currículo, é buscada de novo. Sem foto, aparece a inicial do nome.</p>
+      <form method="post">
+        <input type="hidden" name="acao" value="fotos">
+        <label class="inline" style="margin-bottom:8px"><input type="checkbox" name="exibir_fotos" value="1" {{ 'checked' if fotos_on }}> Exibir fotos do Lattes</label><br>
+        <label class="inline" style="margin-bottom:12px"><input type="checkbox" name="limpar" value="1"> Apagar fotos guardadas (buscar de novo)</label><br>
+        <button class="btn" type="submit">Salvar</button>
+      </form>
+    </div>
+
+    <div class="box">
       <h3>eLattes</h3>
       <form method="post">
         <label>URL do eLattes<input name="elattes_url" value="{{ elattes_url }}"></label>

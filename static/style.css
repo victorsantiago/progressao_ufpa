@@ -139,3 +139,7 @@ label.inline input:not([type=checkbox]){display:inline-block;width:92px;margin:0
 .gpanel{display:none;border-radius:0 0 12px 12px;border-color:#a9d9bd}.gpanel.active{display:block}
 .gpanel.grupo-off{opacity:1}.gpanel.grupo-off .tabela{opacity:.6}
 @media(max-width:900px){.gtabs{grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-bottom:10px}.gtab{border-radius:10px;border-bottom:1px solid var(--line)}.gpanel{border-radius:12px}}
+/* foto no avatar: a inicial fica por baixo e aparece se a foto não existir */
+.avatar{position:relative;overflow:hidden}
+.avatar img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:var(--pri-l)}
+.avatar.big{box-shadow:0 0 0 3px #fff,0 0 0 5px var(--pri)}

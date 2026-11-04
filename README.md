@@ -31,6 +31,14 @@ Ferramenta web (Flask + SQLite) que:
   CSV usa o filtro da tela.
 - A logo da UFPA é enviada em **Gestão → Configuração → Logo** e fica guardada no disco do servidor.
 
+## Fotos dos professores
+
+A foto vem do serviço oficial de fotos do CNPq (`servicosweb.cnpq.br/wspessoa/servletrecuperafoto`), que usa o
+identificador interno do CNPq (K0000000A0). Esse identificador é obtido apenas lendo o redirecionamento de
+`lattes.cnpq.br/<ID>`; o currículo não é aberto. A miniatura (320×320) fica em `DATA_DIR/fotos/` e é buscada de novo
+quando o currículo é reimportado. Sem foto, aparece a inicial; nova tentativa só após 24 h.
+Pode ser desligado em **Gestão → Configuração → Fotos dos professores**.
+
 ## Executar
 
 ```bash
