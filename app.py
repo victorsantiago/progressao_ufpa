@@ -220,32 +220,31 @@ def _num(v):
         return None
 
 
-def minimos(con=None):
-    """({grupo: mínimo ou None}, mínimo total ou None) definidos na Tabela de valores."""
-    c = con or get_db()
-    por_grupo = {r["codigo"]: r["minimo"] for r in c.execute("SELECT codigo, minimo FROM grupos")}
-    return por_grupo, _num(cfg("minimo_total", "", c))
+def pontuacao_necessaria(con=None):
+    """Pontuação necessária para a progressão (Tabela de valores). None = não informada."""
+    return _num(cfg("pontuacao_necessaria", "", con))
+
+
+GRUPO_ENSINO = "I"
+TETO_ENSINO = 0.5  # Grupo I não pode exceder 50% da pontuação necessária
 
 
 def situacao(pont, fl, con=None):
-    """Compara a pontuação com os mínimos: por grupo considerado e total."""
-    por_grupo, total_min = minimos(con)
-    grupos = []
-    for g_ in fl["grupos"]:
-        mn = por_grupo.get(g_)
-        if mn is None:
-            continue
-        pts = pont["totais_grupo"].get(g_, 0.0)
-        grupos.append({"grupo": g_, "minimo": mn, "pontos": pts, "ok": pts >= mn, "falta": max(0.0, mn - pts)})
-    total = None
-    if total_min is not None:
-        total = {"minimo": total_min, "pontos": pont["total"], "ok": pont["total"] >= total_min,
-                 "falta": max(0.0, total_min - pont["total"]),
-                 "pct": min(100.0, 100.0 * pont["total"] / total_min) if total_min else 100.0}
-    definido = total is not None or bool(grupos)
-    apto = definido and (total is None or total["ok"]) and all(x["ok"] for x in grupos)
-    return {"grupos": grupos, "por_grupo": {x["grupo"]: x for x in grupos}, "total": total,
-            "definido": definido, "apto": apto}
+    """Aplica o teto do Grupo I e compara o total com a pontuação necessária.
+    Devolve também o total ajustado (Grupo I limitado a 50% da pontuação necessária)."""
+    nec = pontuacao_necessaria(con)
+    bruto_i = pont["totais_grupo"].get(GRUPO_ENSINO, 0.0)
+    considera_i = GRUPO_ENSINO in fl["grupos"]
+    teto = nec * TETO_ENSINO if nec is not None else None
+    excedente = max(0.0, bruto_i - teto) if (teto is not None and considera_i) else 0.0
+    total_ajustado = round(pont["total"] - excedente, 2)
+    out = {"necessaria": nec, "teto_i": teto, "grupo_i": bruto_i, "grupo_i_considerado": round(bruto_i - excedente, 2),
+           "excedente_i": round(excedente, 2), "considera_i": considera_i, "total": total_ajustado,
+           "definido": nec is not None}
+    if nec is not None:
+        out.update({"ok": total_ajustado >= nec, "falta": round(max(0.0, nec - total_ajustado), 2),
+                    "pct": min(100.0, 100.0 * total_ajustado / nec) if nec else 100.0})
+    return out
 
 
 def G():
@@ -528,11 +527,11 @@ def _executar_job(job):
         ids = job["ids"]
         for i in range(0, len(ids), LOTE):
             lote = ids[i:i + LOTE]
-            job["etapa"] = f"Baixando lote {i // LOTE + 1} de {(len(ids) + LOTE - 1) // LOTE} no eLattes"
+            job["etapa"] = f"Baixando lote {i // LOTE + 1} de {(len(ids) + LOTE - 1) // LOTE} "
 
             def on_progress(p, base=i):
                 job["baixados"] = base + int(p.get("current") or 0)
-                job["mensagem"] = f"eLattes: {p.get('status', '')} – {p.get('message') or ''} ({p.get('current', 0)}/{p.get('total', len(lote))})"
+                job["mensagem"] = f"Download: {p.get('status', '')} – {p.get('message') or ''} ({p.get('current', 0)}/{p.get('total', len(lote))})"
 
             try:
                 xmls = client.baixar_curriculos(lote, on_progress=on_progress)
@@ -544,7 +543,7 @@ def _executar_job(job):
             for pid in lote:
                 xml = xmls.get(pid)
                 if not xml:
-                    job["erros"].append({"id": pid, "erro": "XML não veio no zip do eLattes (ID inexistente ou falha no download)"})
+                    job["erros"].append({"id": pid, "erro": "XML não veio no download (ID inexistente ou falha no download)"})
                     continue
                 try:
                     real_id, nome = salvar_curriculo(con, pid, xml)
@@ -667,8 +666,12 @@ def dados_grafico(parsed, itens, fl):
     if outros:
         datasets.append(outros)
     totais = [round(sum(d["valores"][i] for d in datasets), 2) for i in range(len(serie["anos"]))]
-    return {"anos": serie["anos"], "dentro": dentro, "datasets": datasets, "totais": totais,
-            "tem_dados": any(any(d["valores"]) for d in datasets)}
+    # série de cada grupo (inclusive os fora da análise), para o gráfico acompanhar a aba selecionada
+    por_grupo = {g_: {"nome": grupos[g_], "cor": CORES_GRUPOS[i] if i < len(CORES_GRUPOS) else COR_OUTROS,
+                      "valores": serie["series"].get(g_, [0.0] * len(serie["anos"])), "considerado": g_ in fl["grupos"]}
+                 for i, g_ in enumerate(ordem)}
+    return {"anos": serie["anos"], "dentro": dentro, "datasets": datasets, "totais": totais, "por_grupo": por_grupo,
+            "tem_dados": any(any(v["valores"]) for v in por_grupo.values())}
 
 
 @app.route("/professor/<pid>/xml")
@@ -779,9 +782,9 @@ def admin_verificar_todos():
     try:
         for i in range(0, len(ids), 50):
             verificar_remoto(db, ids[i:i + 50])
-        flash(f"Data de atualização verificada no eLattes para {len(ids)} professor(es).", "ok")
+        flash(f"Versão do Lattes verificada para {len(ids)} professor(es).", "ok")
     except Exception as e:  # noqa
-        flash(f"Falha ao consultar o eLattes: {e}", "erro")
+        flash(f"Falha ao consultar a versão do Lattes: {e}", "erro")
     return redirect(url_for("admin_professores"))
 
 
@@ -924,9 +927,8 @@ def admin_tabela():
         if k:
             cats_por_item.setdefault(k, []).append(CATEGORIAS_MAP[c]["label"])
     grupo_ativo = request.args.get("grupo") if request.args.get("grupo") in grupos else next(iter(grupos), "")
-    min_grupo, min_total = minimos(db)
     return render_template("admin_tabela.html", por_grupo=por_grupo, cats_por_item=cats_por_item, GRUPOS=grupos,
-                           min_grupo=min_grupo, min_total=min_total,
+                           pont_necessaria=pontuacao_necessaria(db),
                            originais=originais, CONTAGENS=CONTAGENS, grupo_ativo=grupo_ativo)
 
 
@@ -938,17 +940,11 @@ def _salvar_edicoes_tabela(db):
         if novo and novo != nome:
             db.execute("UPDATE grupos SET nome=? WHERE codigo=?", (novo, cod))
             n += 1
-        if f"grupo_minimo__{cod}" in request.form:
-            mn = _num(request.form.get(f"grupo_minimo__{cod}"))
-            atual = db.execute("SELECT minimo FROM grupos WHERE codigo=?", (cod,)).fetchone()["minimo"]
-            if mn != atual:
-                db.execute("UPDATE grupos SET minimo=? WHERE codigo=?", (mn, cod))
-                n += 1
-    if "minimo_total" in request.form:
-        mt = _num(request.form.get("minimo_total"))
-        if mt != _num(cfg("minimo_total", "", db)):
-            db.execute("INSERT INTO config (chave, valor) VALUES ('minimo_total', ?) "
-                       "ON CONFLICT(chave) DO UPDATE SET valor=excluded.valor", ("" if mt is None else f"{mt:g}",))
+    if "pontuacao_necessaria" in request.form:
+        pn = _num(request.form.get("pontuacao_necessaria"))
+        if pn != pontuacao_necessaria(db):
+            db.execute("INSERT INTO config (chave, valor) VALUES ('pontuacao_necessaria', ?) "
+                       "ON CONFLICT(chave) DO UPDATE SET valor=excluded.valor", ("" if pn is None else f"{pn:g}",))
             n += 1
     # nova ordem dentro de cada grupo (reaproveita os números de ordem do próprio grupo)
     itens_todos = carregar_itens(db)
@@ -1188,12 +1184,13 @@ def admin_exportar():
     w = csv.writer(out, delimiter=";")
     w.writerow([descreve_filtros(fl)])
     w.writerow(["id_lattes", "nome", "atualizacao_lattes", "importado_em", "status"]
-               + [f"Grupo {g}{'' if g in fl['grupos'] else ' (fora da análise)'}" for g in G()] + ["Total considerado", "Mínimos"])
+               + [f"Grupo {g}{'' if g in fl['grupos'] else ' (fora da análise)'}" for g in G()] + ["Total considerado", "Grupo I considerado (teto 50%)", "Total ajustado", "Progressão"])
     for p in profs:
         _, pont, _ = _montar_pontuacao(p, fl, itens, mapa)
         w.writerow([p["id"], p["nome"], p["data_atualizacao_br"], fmt_dt(p["importado_em"]), status_atualizacao(p)]
-                   + [f"{pont['totais_grupo'][g]:.1f}".replace(".", ",") for g in G()] + [f"{pont['total']:.1f}".replace(".", ","),
-                      (lambda st: ("atingiu" if st["apto"] else "não atingiu") if st["definido"] else "")(situacao(pont, fl, db))])
+                   + [f"{pont['totais_grupo'][g]:.1f}".replace(".", ",") for g in G()] + [f"{pont['total']:.1f}".replace(".", ",")]
+                   + (lambda st: [f"{st['grupo_i_considerado']:.1f}".replace(".", ","), f"{st['total']:.1f}".replace(".", ","),
+                                  ("atingiu" if st["ok"] else "não atingiu") if st["definido"] else ""])(situacao(pont, fl, db)))
     sufixo = f"_{fl['ini'] or 'inicio'}_a_{fl['fim'] or 'atual'}" if (fl["ini"] or fl["fim"]) else ""
     return app.response_class(out.getvalue().encode("utf-8-sig"), mimetype="text/csv",
                               headers={"Content-Disposition": f"attachment; filename=pontuacao_professores{sufixo}.csv"})
