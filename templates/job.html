@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Importação{% endblock %}
+{% block content %}
+<h1>Importação em andamento</h1>
+<div class="box" id="job">
+  <div class="progress"><div class="bar" id="bar" style="width:0%"></div></div>
+  <p><b id="etapa">{{ job.etapa or 'Iniciando…' }}</b> <span class="muted" id="msg">{{ job.mensagem }}</span></p>
+  <p class="muted small">IDs: {{ job.total }} · <span id="contagem"></span></p>
+  <div id="importados"></div>
+  <div id="erros"></div>
+  <p><a class="btn" href="{{ voltar }}" id="voltar">Voltar</a></p>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const url = "{{ url_for('api_job', job_id=job.id) }}";
+async function tick() {
+  const d = await (await fetch(url)).json();
+  const feito = d.importados.length + d.erros.length;
+  const pct = d.status === 'concluido' ? 100 : Math.round(100 * Math.max(d.baixados, feito) / Math.max(1, d.total));
+  document.getElementById('bar').style.width = pct + '%';
+  document.getElementById('etapa').textContent = d.etapa || d.status;
+  document.getElementById('msg').textContent = d.mensagem || '';
+  document.getElementById('contagem').textContent = `baixados ${d.baixados} · importados ${d.importados.length} · erros ${d.erros.length}`;
+  document.getElementById('importados').innerHTML = d.importados.map(p => `<div class="ok-line">✓ <a href="/professor/${p.id}">${p.nome}</a> <span class="mono muted">${p.id}</span></div>`).join('');
+  document.getElementById('erros').innerHTML = d.erros.map(e => `<div class="err-line">✗ <span class="mono">${e.id}</span> — ${e.erro}</div>`).join('');
+  if (d.status === 'concluido' || d.status === 'erro') {
+    document.getElementById('bar').classList.add(d.status === 'erro' ? 'err' : 'done');
+    {% if job.total == 1 and job.origem == 'atualizar' %}
+    if (d.importados.length === 1) setTimeout(() => location.href = '/professor/' + d.importados[0].id, 800);
+    {% endif %}
+    return;
+  }
+  setTimeout(tick, 1500);
+}
+tick();
+</script>
+{% endblock %}

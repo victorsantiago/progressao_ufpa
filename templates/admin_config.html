@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Gestão · Configuração{% endblock %}
+{% block content %}
+<h1>Configuração</h1>
+<div class="box" style="max-width:560px">
+  <form method="post">
+    <label>URL do eLattes<input name="elattes_url" value="{{ elattes_url }}"></label>
+    <p class="muted small">Endpoints usados: <code>POST /download_cvs</code>, <code>GET /progress/&lt;job&gt;</code>, <code>GET /download_file/&lt;job&gt;</code>, <code>POST /get_last_update</code>.</p>
+    <button class="btn primary" type="submit">Salvar</button>
+  </form>
+</div>
+<div class="box" style="max-width:560px">
+  <h3>Credenciais</h3>
+  <p class="muted small">Usuário <code>admin</code> / senha <code>senha</code> (padrão de desenvolvimento). Para alterar, defina as variáveis de ambiente <code>ADMIN_USER</code>, <code>ADMIN_PASS</code> e <code>SECRET_KEY</code> antes de iniciar.</p>
+</div>
+{% endblock %}

@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Gestão · Mapeamento{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Mapeamento Lattes → Tabela</h1>
+  <form method="post" onsubmit="return confirm('Restaurar o mapeamento padrão?')"><input type="hidden" name="acao" value="restaurar"><button class="btn">Restaurar padrão</button></form>
+</div>
+<p class="muted small">Cada tipo de registro extraído do XML do Lattes é associado a um item da tabela. Escolha “não pontua” para desconsiderar um tipo. A quantidade é contada por registro, por ano de duração (projetos, cargos) ou a cada 3 h (cursos ministrados), conforme indicado.</p>
+<form method="post">
+  <div class="sticky-save"><button class="btn primary" type="submit">Salvar mapeamento</button></div>
+  <div class="box">
+  <table class="tabela">
+    <thead><tr><th>Item do Lattes</th><th style="width:110px">Contagem</th><th style="width:55%">Item da tabela</th></tr></thead>
+    <tbody>
+    {% for c in cats %}
+      <tr>
+        <td>{{ c.label }}<div class="mono muted small">{{ c.key }}</div></td>
+        <td class="small">{{ {'count':'por registro','years':'por ano','hours3':'a cada 3 h'}[c.modo] }}</td>
+        <td>
+          <select name="map__{{ c.key }}" class="sel">
+            <option value="">— não pontua —</option>
+            {% for it in itens %}
+              <option value="{{ it.key }}" {{ 'selected' if it.key == c.atual }}>{{ it.key }} ({{ '%g'|format(it.valor) }} pt) — {{ it.atividade[:110] }}{{ '…' if it.atividade|length > 110 }}</option>
+            {% endfor %}
+          </select>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <button class="btn primary" type="submit">Salvar mapeamento</button>
+</form>
+{% endblock %}

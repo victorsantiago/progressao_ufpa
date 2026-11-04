@@ -1,0 +1,25 @@
+# Blueprint do Render: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: progressao-ufpa
+    runtime: python
+    plan: starter            # disco persistente exige plano pago; no "free" os dados somem a cada deploy/reinício
+    buildCommand: pip install -r requirements.txt
+    # 1 processo só: o progresso das importações fica em memória
+    startCommand: gunicorn -w 1 --threads 8 --timeout 120 -b 0.0.0.0:$PORT app:app
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: DATA_DIR
+        value: /var/data
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ADMIN_USER
+        sync: false           # o Render pede o valor na criação
+      - key: ADMIN_PASS
+        sync: false
+    disk:
+      name: progressao-data
+      mountPath: /var/data
+      sizeGB: 1

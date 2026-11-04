@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Entrar{% endblock %}
+{% block content %}
+<div class="login-box">
+  <h1>Camada de gestão</h1>
+  {% if erro %}<div class="flash erro">{{ erro }}</div>{% endif %}
+  <form method="post">
+    <label>Usuário<input name="usuario" value="admin" autofocus></label>
+    <label>Senha<input name="senha" type="password"></label>
+    <button class="btn primary" type="submit">Entrar</button>
+  </form>
+</div>
+{% endblock %}

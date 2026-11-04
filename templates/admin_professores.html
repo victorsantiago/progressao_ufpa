@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Gestão · Professores{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Professores incorporados <span class="count">{{ profs|length }}</span></h1>
+  <div class="actions">
+    <form method="post" action="{{ url_for('admin_verificar_todos') }}"><button class="btn">Verificar atualizações no eLattes</button></form>
+    <form method="post" action="{{ url_for('admin_atualizar_desatualizados') }}"><button class="btn">Atualizar todos os desatualizados</button></form>
+    <a class="btn" href="{{ url_for('admin_exportar') }}">Exportar pontuação (CSV)</a>
+    <a class="btn primary" href="{{ url_for('admin_importar') }}">+ Importar</a>
+  </div>
+</div>
+
+{% if jobs %}
+<div class="box">
+  <h3>Importações recentes</h3>
+  <table class="tabela small">
+    <thead><tr><th>Início</th><th>Origem</th><th>IDs</th><th>Importados</th><th>Erros</th><th>Status</th><th></th></tr></thead>
+    <tbody>{% for j in jobs %}
+      <tr><td>{{ j.criado_em|fmt_dt }}</td><td>{{ j.origem }}</td><td>{{ j.total }}</td><td>{{ j.importados|length }}</td><td>{{ j.erros|length }}</td>
+          <td><span class="pill {{ 'atualizado' if j.status == 'concluido' else ('desatualizado' if j.status == 'erro' else 'desconhecido') }}">{{ j.status }}</span></td>
+          <td><a href="{{ url_for('job_page', job_id=j.id) }}">ver</a></td></tr>
+    {% endfor %}</tbody>
+  </table>
+</div>
+{% endif %}
+
+<div class="box">
+<table class="tabela">
+  <thead><tr><th>Nome</th><th>ID Lattes</th><th>Última atualização (Lattes)</th><th>Importado em</th><th>Versão no eLattes</th><th>Status</th><th></th></tr></thead>
+  <tbody>
+  {% for p in profs %}
+    {% set st = status_atualizacao(p) %}
+    <tr>
+      <td><a href="{{ url_for('professor', pid=p.id) }}">{{ p.nome }}</a></td>
+      <td class="mono">{{ p.id }}</td>
+      <td>{{ p.data_atualizacao_br or '—' }}</td>
+      <td>{{ p.importado_em|fmt_dt }}</td>
+      <td>{{ p.remota_atualizacao or '—' }}<div class="muted small">{% if p.verificado_em %}verificado {{ p.verificado_em|fmt_dt }}{% endif %}</div></td>
+      <td><span class="pill {{ st }}">{{ {'atualizado':'Atualizado','desatualizado':'Desatualizado','desconhecido':'Não verificado'}[st] }}</span></td>
+      <td class="row-actions">
+        <form method="post" action="{{ url_for('professor_atualizar', pid=p.id) }}"><button class="btn tiny">Reimportar</button></form>
+        <form method="post" action="{{ url_for('admin_remover', pid=p.id) }}" onsubmit="return confirm('Remover {{ p.nome }}?')"><button class="btn tiny danger">Remover</button></form>
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="7" class="muted">Nenhum professor importado. <a href="{{ url_for('admin_importar') }}">Importar agora.</a></td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

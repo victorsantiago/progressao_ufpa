@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}{{ cv.dados.nome }}{% endblock %}
+{% block content %}
+<div class="profile-head">
+  <div class="avatar big">{{ cv.dados.nome[:1] }}</div>
+  <div class="profile-info">
+    <h1>{{ cv.dados.nome }}</h1>
+    <div class="muted">ID Lattes {{ prof.id }}{% if cv.dados.orcid %} · ORCID {{ cv.dados.orcid }}{% endif %}
+      · <a href="https://lattes.cnpq.br/{{ prof.id }}" target="_blank" rel="noopener">Lattes ↗</a>
+      · <a href="{{ url_for('professor_xml', pid=prof.id) }}">XML</a></div>
+    <div class="muted small">Lattes atualizado em <b>{{ prof.data_atualizacao_br }}</b> · importado em {{ prof.importado_em|fmt_dt }}
+      · <span id="verif-info">{% if prof.verificado_em %}verificado no eLattes em {{ prof.verificado_em|fmt_dt }}{% else %}ainda não verificado no eLattes{% endif %}</span></div>
+    <div class="score-badge">Pontuação total: <b>{{ '%.1f'|format(pont.total) }}</b> pontos</div>
+  </div>
+  <div class="profile-actions">
+    <form method="post" action="{{ url_for('professor_atualizar', pid=prof.id) }}" id="form-atualizar">
+      <button type="submit" id="btn-status" class="btn-status {{ status }}" {% if status == 'atualizado' %}disabled{% endif %}>
+        {% if status == 'atualizado' %}✓ Currículo Atualizado{% elif status == 'desatualizado' %}⟳ Atualizar{% else %}⟳ Atualizar{% endif %}
+      </button>
+    </form>
+    <div class="small muted" id="btn-hint">
+      {% if status == 'desatualizado' %}Nova versão no Lattes: {{ prof.remota_atualizacao }}{% elif status == 'desconhecido' %}Verificando no eLattes…{% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab {{ 'active' if aba == 'curriculo' }}" data-tab="curriculo">Currículo</button>
+  <button class="tab {{ 'active' if aba == 'pontuacao' }}" data-tab="pontuacao">Pontuação</button>
+</div>
+
+<!-- ===================== ABA CURRÍCULO ===================== -->
+<section id="tab-curriculo" class="tab-panel {{ 'active' if aba == 'curriculo' }}">
+  {% if cv.dados.resumo %}<div class="box"><h3>Resumo</h3><p class="resumo">{{ cv.dados.resumo }}</p></div>{% endif %}
+  {% if cv.dados.areas %}<div class="box"><h3>Áreas de atuação</h3><ul class="plain">{% for a in cv.dados.areas %}<li>{{ a }}</li>{% endfor %}</ul></div>{% endif %}
+  {% if cv.dados.idiomas %}<div class="box"><h3>Idiomas</h3><ul class="plain">{% for i in cv.dados.idiomas %}<li><b>{{ i.idioma }}</b> — compreende {{ i.compreensao|lower }}, fala {{ i.fala|lower }}, lê {{ i.leitura|lower }}, escreve {{ i.escrita|lower }}</li>{% endfor %}</ul></div>{% endif %}
+
+  <div class="toc">
+    {% for s in cv.secoes if s.registros %}<a href="#sec-{{ s.key }}">{{ s.titulo }} <span class="count">{{ s.registros|length }}</span></a>{% endfor %}
+  </div>
+
+  {% for s in cv.secoes if s.registros %}
+  <div class="box" id="sec-{{ s.key }}">
+    <h3>{{ s.titulo }} <span class="count">{{ s.registros|length }}</span></h3>
+    <ol class="registros">
+      {% for r in s.registros %}
+      <li class="reg">
+        <div class="reg-main">
+          <span class="reg-ano">{{ r.ano or '—' }}</span>
+          <div>
+            <div class="reg-titulo">{{ r.titulo }}</div>
+            {% if r.autores %}<div class="reg-autores">{{ r.autores|join('; ') }}</div>{% endif %}
+            {% if r.subtitulo %}<div class="reg-sub">{{ r.subtitulo }}</div>{% endif %}
+            {% set det = r.detalhes.items()|selectattr('1')|list %}
+            {% if det %}<details class="reg-det"><summary>detalhes</summary><dl>{% for k, v in det %}<dt>{{ k }}</dt><dd>{{ v }}</dd>{% endfor %}</dl></details>{% endif %}
+          </div>
+        </div>
+        {% if r.categoria and pontos_cat[r.categoria].item_key %}
+          {% set l = pontos_cat[r.categoria] %}
+          <span class="reg-pts" title="{{ l.item_key }} – {{ l.item_atividade }}">{{ l.item_key }} · {{ '%g'|format(l.valor) }} pt{% if l.qtd != l.registros|length %}/un{% endif %}</span>
+        {% elif r.categoria %}
+          <span class="reg-pts none" title="Categoria sem item mapeado">não pontua</span>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+  </div>
+  {% endfor %}
+</section>
+
+<!-- ===================== ABA PONTUAÇÃO ===================== -->
+<section id="tab-pontuacao" class="tab-panel {{ 'active' if aba == 'pontuacao' }}">
+  <div class="totais">
+    {% for g, nome in GRUPOS.items() %}
+    <div class="total-card"><div class="tc-g">Grupo {{ g }}</div><div class="tc-v">{{ '%.1f'|format(pont.totais_grupo[g]) }}</div><div class="tc-n">{{ nome }}</div></div>
+    {% endfor %}
+    <div class="total-card geral"><div class="tc-g">Total</div><div class="tc-v">{{ '%.1f'|format(pont.total) }}</div><div class="tc-n">pontos (todos os grupos)</div></div>
+  </div>
+  <p class="muted small">Pontuação calculada automaticamente a partir do XML do Lattes, com os valores e o mapeamento definidos na camada de gestão. Itens sem correspondência no Lattes (ex.: carga horária de aulas) devem ser comprovados à parte.</p>
+
+  {% for g, nome in GRUPOS.items() %}
+  {% set linhas = por_grupo[g] %}
+  <div class="box">
+    <h3>Grupo {{ g }} — {{ nome }} <span class="count">{{ '%.1f'|format(pont.totais_grupo[g]) }} pts</span></h3>
+    {% if not linhas %}<p class="muted">Nenhum item do Lattes mapeado para este grupo.</p>{% else %}
+    <table class="tabela">
+      <thead><tr><th>Item do Lattes</th><th>Item da tabela</th><th class="num">Qtd.</th><th class="num">Valor</th><th class="num">Pontos</th></tr></thead>
+      <tbody>
+      {% for l in linhas %}
+        <tr class="{{ 'zero' if not l.item_key }}">
+          <td>
+            <details><summary>{{ l.label }}</summary>
+              <ul class="plain small">{% for r in l.registros %}<li>{{ r }}</li>{% endfor %}</ul>
+            </details>
+          </td>
+          <td class="small">{% if l.item_key %}<b>{{ l.item_key }}</b> {{ l.item_atividade }}{% else %}<i class="muted">não pontua</i>{% endif %}</td>
+          <td class="num">{{ '%g'|format(l.qtd) }}</td>
+          <td class="num">{{ '%g'|format(l.valor) if l.item_key else '—' }}</td>
+          <td class="num"><b>{{ '%.1f'|format(l.pontos) }}</b></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+  {% endfor %}
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+  document.querySelectorAll('.tab, .tab-panel').forEach(e => e.classList.remove('active'));
+  t.classList.add('active'); document.getElementById('tab-' + t.dataset.tab).classList.add('active');
+  history.replaceState(null, '', '?aba=' + t.dataset.tab);
+}));
+// Verifica no eLattes se há versão mais nova e ajusta o botão
+(async () => {
+  const btn = document.getElementById('btn-status'), hint = document.getElementById('btn-hint');
+  try {
+    const r = await fetch("{{ url_for('api_verificar', pid=prof.id) }}");
+    const d = await r.json();
+    btn.classList.remove('atualizado', 'desatualizado', 'desconhecido');
+    if (d.status === 'atualizado') { btn.classList.add('atualizado'); btn.textContent = '✓ Currículo Atualizado'; btn.disabled = true; hint.textContent = 'Versão mais recente do Lattes (' + d.remota + ')'; }
+    else if (d.status === 'desatualizado') { btn.classList.add('desatualizado'); btn.textContent = '⟳ Atualizar'; btn.disabled = false; hint.textContent = 'Nova versão no Lattes: ' + d.remota; }
+    else { btn.classList.add('desconhecido'); btn.textContent = '⟳ Atualizar'; btn.disabled = false; hint.textContent = 'Não foi possível verificar no eLattes agora.'; hint.title = d.erro || ''; }
+    if (d.verificado_em) document.getElementById('verif-info').textContent = 'verificado no eLattes em ' + d.verificado_em;
+  } catch (e) { hint.textContent = 'Não foi possível verificar no eLattes.'; }
+})();
+</script>
+{% endblock %}

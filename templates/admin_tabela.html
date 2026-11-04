@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Gestão · Tabela de valores{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Tabela de valores (Anexo I)</h1>
+  <div class="actions">
+    <input type="search" id="busca" placeholder="Filtrar itens…" class="busca">
+    <form method="post" onsubmit="return confirm('Restaurar todos os valores de referência?')"><input type="hidden" name="acao" value="restaurar"><button class="btn">Restaurar referência</button></form>
+  </div>
+</div>
+<p class="muted small">Altere a pontuação de cada item e clique em <b>Salvar</b>. A coluna “Alimentado por” mostra quais itens do Lattes estão mapeados para o item (ajustável em <a href="{{ url_for('admin_mapeamento') }}">Mapeamento</a>). Itens sem correspondência no Lattes ficam disponíveis para a pontuação manual/comprovação.</p>
+<form method="post" id="form-tabela">
+  <div class="sticky-save"><button class="btn primary" type="submit">Salvar valores</button></div>
+  {% for g, nome in GRUPOS.items() %}
+  <div class="box">
+    <h3>Grupo {{ g }} — {{ nome }}</h3>
+    <table class="tabela">
+      <thead><tr><th style="width:70px">Item</th><th>Atividade</th><th style="width:28%">Alimentado por (Lattes)</th><th class="num" style="width:90px">Referência</th><th class="num" style="width:110px">Valor</th></tr></thead>
+      <tbody>
+      {% for it in por_grupo[g] %}
+        <tr class="item-row" data-busca="{{ (it.key ~ ' ' ~ it.atividade)|lower }}">
+          <td class="mono">{{ it.key }}</td>
+          <td>{{ it.atividade }}</td>
+          <td class="small">{% for c in cats_por_item.get(it.key, []) %}<span class="chip">{{ c }}</span>{% endfor %}</td>
+          <td class="num muted">{{ '%g'|format(it.valor_padrao) }}</td>
+          <td class="num"><input type="number" step="0.5" min="0" name="valor__{{ it.key }}" value="{{ '%g'|format(it.valor) }}" class="val {{ 'changed' if it.valor != it.valor_padrao }}"></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endfor %}
+  <button class="btn primary" type="submit">Salvar valores</button>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+document.getElementById('busca').addEventListener('input', e => {
+  const q = e.target.value.toLowerCase();
+  document.querySelectorAll('.item-row').forEach(r => r.style.display = r.dataset.busca.includes(q) ? '' : 'none');
+});
+</script>
+{% endblock %}
