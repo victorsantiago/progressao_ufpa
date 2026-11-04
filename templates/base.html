@@ -11,7 +11,7 @@
 <header class="topbar">
   <div class="wrap">
     <a class="brand" href="{{ url_for('index') }}">
-      {% if tem_logo %}<img class="brand-logo" src="{{ url_for('logo') }}" alt="UFPA">{% else %}<span class="logo">P</span>{% endif %}
+      {% if tem_logo %}<img class="brand-logo {{ 'sem-fundo' if logo_fundo == 'sem' }}" src="{{ url_for('logo') }}?v={{ logo_versao }}" alt="UFPA">{% else %}<span class="logo">P</span>{% endif %}
       <span class="brand-txt"><span class="brand-nome">{{ APP_NOME }}</span><span class="brand-sub">{{ APP_SUB }} · progressão funcional docente</span></span>
     </a>
     <nav>

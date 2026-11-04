@@ -203,3 +203,9 @@ tr.movido td{animation:destaque 1.2s ease-out}
 .tag-seg{display:inline-block;background:#eceef0;border:1px solid #dcdfe3;color:#3d4248;border-radius:5px;padding:2px 7px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;line-height:1.4}
 .tag-sep{color:#9aa0a6;font-size:12px}
 .tag-cond{display:inline-block;background:#f6f7f8;border:1px dashed #cfd3d8;color:#5b6168;border-radius:5px;padding:2px 7px;font-size:11.5px;line-height:1.4}
+/* logo: selo branco (colorida) ou direto sobre o vermelho (branca) */
+.brand-logo.sem-fundo{background:none;padding:0;height:58px}
+.logo-preview.no-cabecalho{background:var(--ufpa);border:none;border-top:5px solid var(--ufpa-esc);display:flex;align-items:center;gap:12px;justify-content:center}
+.logo-preview.no-cabecalho span{color:#fff;font-size:12px;opacity:.85}
+.logo-preview.no-cabecalho img{max-height:58px}
+.logo-fundo-form{margin-top:10px}.logo-fundo-form select{padding:5px 8px;border:1px solid var(--line);border-radius:6px;font-size:13px}

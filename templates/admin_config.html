@@ -26,13 +26,23 @@
     <div class="box">
       <h3>Logo</h3>
       <p class="muted small">Envie a logo oficial da UFPA (PNG ou SVG, preferencialmente com fundo transparente). Ela aparece no cabeçalho e como ícone da aba e fica guardada no disco do servidor.</p>
-      {% if tem_logo %}<div class="logo-preview"><img src="{{ url_for('logo') }}?v={{ range(1, 99999)|random }}" alt="Logo atual"></div>{% endif %}
+      {% if tem_logo %}<div class="logo-preview no-cabecalho"><img class="brand-logo {{ 'sem-fundo' if logo_fundo == 'sem' }}" src="{{ url_for('logo') }}?v={{ logo_versao }}" alt="Logo atual"><span>Prévia no cabeçalho</span></div>{% endif %}
       <form method="post" enctype="multipart/form-data">
         <input type="hidden" name="acao" value="logo">
         <label>Arquivo da logo<input type="file" name="logo" accept=".png,.svg,.jpg,.jpeg,.webp" required></label>
         <button class="btn primary" type="submit">Enviar logo</button>
       </form>
       {% if tem_logo %}
+      <form method="post" class="logo-fundo-form">
+        <input type="hidden" name="acao" value="logo_fundo">
+        <label class="inline">Fundo no cabeçalho
+          <select name="logo_fundo" onchange="this.form.submit()">
+            <option value="auto" {{ 'selected' if logo_fundo_escolha not in ('selo','sem') }}>Automático ({{ 'sem fundo' if logo_fundo == 'sem' else 'selo branco' }})</option>
+            <option value="sem" {{ 'selected' if logo_fundo_escolha == 'sem' }}>Sem fundo — para logo branca</option>
+            <option value="selo" {{ 'selected' if logo_fundo_escolha == 'selo' }}>Selo branco — para logo colorida</option>
+          </select>
+        </label>
+      </form>
       <form method="post" style="margin-top:8px"><input type="hidden" name="acao" value="remover_logo"><button class="btn tiny danger" type="submit">Remover logo</button></form>
       {% endif %}
     </div>

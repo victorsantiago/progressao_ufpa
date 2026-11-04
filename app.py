@@ -280,9 +280,51 @@ def logo_path():
     return None, None
 
 
+def logo_fundo():
+    """'selo' (logo sobre selo branco) ou 'sem' (logo direto sobre o vermelho)."""
+    escolha = cfg("logo_fundo", "auto")
+    if escolha in ("selo", "sem"):
+        return escolha
+    auto = cfg("logo_fundo_auto", None)
+    if auto is None:
+        # logo enviada antes desta versão: analisa uma vez (apara margens e detecta se é clara)
+        path, ext = logo_path()
+        if not path:
+            return "selo"
+        auto = "sem" if preparar_logo(path, ext) else "selo"
+        db = get_db()
+        db.execute("INSERT INTO config (chave, valor) VALUES ('logo_fundo_auto', ?) "
+                   "ON CONFLICT(chave) DO UPDATE SET valor=excluded.valor", (auto,))
+        db.commit()
+    return auto
+
+
+def preparar_logo(path, ext):
+    """Apara margens transparentes e diz se a logo é clara (branca), para exibir sem selo branco."""
+    if ext == "svg":
+        return False
+    try:
+        from PIL import Image
+        im = Image.open(path)
+        im.load()
+        im = im.convert("RGBA")
+        bbox = im.split()[3].getbbox()
+        if bbox and bbox != (0, 0) + im.size:
+            im = im.crop(bbox)
+        vis = [p for p in im.resize((min(200, im.width), min(200, im.height))).getdata() if p[3] > 40]
+        clara = bool(vis) and sum(0.299 * r + 0.587 * g + 0.114 * b for r, g, b, _ in vis) / len(vis) > 200
+        if ext in ("png", "webp"):
+            im.save(path)
+        return clara
+    except Exception:  # noqa – mantém o arquivo como veio
+        return False
+
+
 @app.context_processor
 def _ctx():
     return {"tem_logo": logo_path()[0] is not None, "ANO_ATUAL": dt.date.today().year, "GRUPOS": G(),
+            "logo_fundo": logo_fundo(), "logo_fundo_escolha": cfg("logo_fundo", "auto"),
+            "logo_versao": int(os.path.getmtime(logo_path()[0])) if logo_path()[0] else 0,
             "fotos_on": cfg("exibir_fotos", "1") == "1"}
 
 
@@ -906,8 +948,16 @@ def admin_config():
                         os.remove(os.path.join(DATA_DIR, f"logo.{e}"))
                     except OSError:
                         pass
-                arq.save(os.path.join(DATA_DIR, f"logo.{ext}"))
-                flash("Logo atualizada.", "ok")
+                destino = os.path.join(DATA_DIR, f"logo.{ext}")
+                arq.save(destino)
+                clara = preparar_logo(destino, ext)
+                if request.form.get("logo_fundo") in ("auto", None, ""):
+                    salvar("logo_fundo_auto", "sem" if clara else "selo")
+                flash("Logo atualizada." + (" Logo clara detectada: exibida sem fundo sobre o vermelho." if clara else ""), "ok")
+        elif acao == "logo_fundo":
+            v = request.form.get("logo_fundo")
+            salvar("logo_fundo", v if v in ("auto", "selo", "sem") else "auto")
+            flash("Aparência da logo salva.", "ok")
         elif acao == "fotos":
             salvar("exibir_fotos", "1" if request.form.get("exibir_fotos") else "0")
             if request.form.get("limpar"):
