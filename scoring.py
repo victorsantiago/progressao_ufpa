@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import re
 """
 Tabela de pontuação (Anexo I – Quadro de Atividades Referenciais) e
 mapeamento entre as categorias extraídas do Lattes e os itens da tabela.
@@ -197,9 +198,24 @@ TABELA_RAW = [
 ]
 
 
+CONTAGENS = {"registro": "por registro", "ano": "por ano", "semestre": "por semestre"}
+
+
+def contagem_padrao(atividade):
+    """Forma de contar sugerida pelo último parêntese do texto do Anexo I,
+    ex.: '(por semestre)' → semestre; '(por projeto/ano)', '(ano/revista)' → ano; demais → registro."""
+    partes = re.findall(r"\(([^()]*)\)", (atividade or "").lower())
+    regra = partes[-1] if partes else ""
+    if re.search(r"\bsemestre\b", regra):
+        return "semestre"
+    if re.search(r"(^|por |/)\s*ano\b", regra):
+        return "ano"
+    return "registro"
+
+
 def tabela_itens():
     """Lista plana de itens, com variantes desdobradas.
-    Retorna dicts: key, grupo, numero, variante, atividade, valor_padrao, ordem."""
+    Retorna dicts: key, codigo, grupo, numero, variante, atividade, valor_padrao, contagem_padrao, ordem."""
     itens = []
     ordem = 0
     for grupo, numero, atividade, pont in TABELA_RAW:
@@ -207,7 +223,8 @@ def tabela_itens():
             for i, (rotulo, valor) in enumerate(pont):
                 ordem += 1
                 itens.append({
-                    "key": f"{grupo}.{numero}.{chr(97 + i)}",
+                    "key": f"{grupo}.{numero}.{chr(97 + i)}", "codigo": f"{grupo}.{numero}.{chr(97 + i)}",
+                    "contagem_padrao": contagem_padrao(atividade),
                     "grupo": grupo, "numero": numero, "variante": rotulo,
                     "atividade": f"{atividade} — {rotulo}",
                     "valor_padrao": float(valor), "ordem": ordem,
@@ -215,7 +232,8 @@ def tabela_itens():
         else:
             ordem += 1
             itens.append({
-                "key": f"{grupo}.{numero}", "grupo": grupo, "numero": numero,
+                "key": f"{grupo}.{numero}", "codigo": f"{grupo}.{numero}", "contagem_padrao": contagem_padrao(atividade),
+                "grupo": grupo, "numero": numero,
                 "variante": "", "atividade": atividade,
                 "valor_padrao": float(pont), "ordem": ordem,
             })
@@ -268,13 +286,13 @@ CATEGORIAS = [
     ("banca_outra", "Outras bancas julgadoras", "III", "III.11", "count"),
     # Projetos
     ("proj_pesquisa_coord_sem_fin", "Projeto de pesquisa – coordenador, sem financiamento", "V", "V.1", "count"),
-    ("proj_pesquisa_coord_fin_int", "Projeto de pesquisa – coordenador, financiamento interno (por ano)", "V", "V.2", "years"),
-    ("proj_pesquisa_coord_fin_ext", "Projeto de pesquisa – coordenador, financiamento externo (por ano)", "V", "V.3", "years"),
-    ("proj_pesquisa_part_sem_fin", "Projeto de pesquisa – integrante, sem financiamento (por ano)", "V", "V.4", "years"),
-    ("proj_pesquisa_part_fin_int", "Projeto de pesquisa – integrante, financiamento interno (por ano)", "V", "V.5", "years"),
-    ("proj_pesquisa_part_fin_ext", "Projeto de pesquisa – integrante, financiamento externo (por ano)", "V", "V.6", "years"),
-    ("proj_extensao_coord", "Projeto de extensão – coordenador (por ano)", "IV", "IV.1", "years"),
-    ("proj_extensao_part", "Projeto de extensão – integrante (por ano)", "IV", "IV.2", "years"),
+    ("proj_pesquisa_coord_fin_int", "Projeto de pesquisa – coordenador, financiamento interno", "V", "V.2", "years"),
+    ("proj_pesquisa_coord_fin_ext", "Projeto de pesquisa – coordenador, financiamento externo", "V", "V.3", "years"),
+    ("proj_pesquisa_part_sem_fin", "Projeto de pesquisa – integrante, sem financiamento", "V", "V.4", "years"),
+    ("proj_pesquisa_part_fin_int", "Projeto de pesquisa – integrante, financiamento interno", "V", "V.5", "years"),
+    ("proj_pesquisa_part_fin_ext", "Projeto de pesquisa – integrante, financiamento externo", "V", "V.6", "years"),
+    ("proj_extensao_coord", "Projeto de extensão – coordenador", "IV", "IV.1", "years"),
+    ("proj_extensao_part", "Projeto de extensão – integrante", "IV", "IV.2", "years"),
     ("proj_ensino_coord", "Projeto de ensino – coordenador", "I", "I.6.a", "count"),
     ("proj_ensino_part", "Projeto de ensino – integrante", "I", "I.6.b", "count"),
     ("proj_outro", "Projeto de outra natureza", "V", None, "count"),
@@ -319,10 +337,10 @@ CATEGORIAS = [
     # Atuação profissional
     ("ensino_graduacao", "Atividade de ensino – graduação (disciplinas)", "I", None, "count"),
     ("ensino_pos", "Atividade de ensino – pós-graduação (disciplinas)", "I", None, "count"),
-    ("cargo_direcao", "Cargo de direção e administração (por ano)", "VI", None, "years"),
-    ("conselho_comissao", "Conselho, comissão e consultoria (por ano)", "VI", "VI.10", "years"),
-    ("revisor_periodico", "Revisor de periódico (por ano/revista)", "VIII", "VIII.66", "years"),
-    ("corpo_editorial", "Membro de corpo editorial (por ano)", "VI", "VI.11", "years"),
+    ("cargo_direcao", "Cargo de direção e administração", "VI", None, "years"),
+    ("conselho_comissao", "Conselho, comissão e consultoria", "VI", "VI.10", "years"),
+    ("revisor_periodico", "Revisor de periódico", "VIII", "VIII.66", "years"),
+    ("corpo_editorial", "Membro de corpo editorial", "VI", "VI.11", "years"),
     ("estagio_realizado", "Estágio realizado", "VII", None, "count"),
     ("treinamento_ministrado", "Treinamento ministrado", "IV", None, "count"),
 ]
@@ -359,26 +377,33 @@ def calcular_pontuacao(categorias_qtd, itens_por_key, mapeamento, ano_ini=None, 
         info = categorias_qtd.get(ckey) or {"registros": []}
         dentro, fora = [], []
         qtd = 0.0
+        item_key = mapeamento.get(ckey, CATEGORIAS_MAP[ckey]["item_padrao"])
+        item = itens_por_key.get(item_key) if item_key else None
+        contagem = (item.get("contagem") or "registro") if item else "registro"
         for rec in map(_registro, info["registros"]):
             ini, fim = rec.get("ini"), rec.get("fim")
-            if not filtro:
-                q = float(rec.get("qtd") or 0)
-            elif ini is None:
+            if filtro and ini is None:
                 fora.append(dict(rec, motivo="sem ano informado"))
                 continue
-            elif max(ini, lo) > min(fim, hi):
+            if filtro and max(ini, lo) > min(fim, hi):
                 fora.append(dict(rec, motivo="fora do interstício"))
                 continue
-            elif modo == "years":
-                q = float(min(fim, hi) - max(ini, lo) + 1)
+            if ini is None:
+                anos = 1
+            elif filtro:
+                anos = min(fim, hi) - max(ini, lo) + 1
             else:
-                q = float(rec.get("qtd") or 0)
+                anos = fim - ini + 1
+            if contagem == "ano":
+                q = float(anos)
+            elif contagem == "semestre":
+                q = float(2 * anos)
+            else:  # por registro: a quantidade natural do registro (ex.: disciplinas, blocos de 3 h)
+                q = 1.0 if modo == "years" else float(rec.get("qtd") or 0)
             qtd += q
             dentro.append(dict(rec, qtd_considerada=q))
         if not dentro and not fora:
             continue
-        item_key = mapeamento.get(ckey, CATEGORIAS_MAP[ckey]["item_padrao"])
-        item = itens_por_key.get(item_key) if item_key else None
         valor = float(item["valor"]) if item else 0.0
         grupo = item["grupo"] if item else CATEGORIAS_MAP[ckey]["grupo"]
         incluido = grupo in grupos
@@ -393,6 +418,8 @@ def calcular_pontuacao(categorias_qtd, itens_por_key, mapeamento, ano_ini=None, 
             "modo": modo,
             "qtd": qtd,
             "item_key": item_key,
+            "item_codigo": (item.get("codigo") or item_key) if item else None,
+            "contagem": contagem,
             "item_atividade": item["atividade"] if item else "— não pontua —",
             "valor": valor,
             "pontos": pontos,

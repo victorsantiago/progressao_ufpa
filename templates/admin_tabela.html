@@ -1,43 +1,91 @@
 {% extends "base.html" %}
 {% block title %}Gestão · Tabela de valores{% endblock %}
 {% block content %}
-<div class="page-head">
-  <h1>Tabela de valores (Anexo I)</h1>
-  <div class="actions">
-    <input type="search" id="busca" placeholder="Filtrar itens…" class="busca">
-    <form method="post" onsubmit="return confirm('Restaurar todos os valores de referência?')"><input type="hidden" name="acao" value="restaurar"><button class="btn">Restaurar referência</button></form>
-  </div>
-</div>
-<p class="muted small">Altere a pontuação de cada item e clique em <b>Salvar</b>. A coluna “Alimentado por” mostra quais itens do Lattes estão mapeados para o item (ajustável em <a href="{{ url_for('admin_mapeamento') }}">Mapeamento</a>). Itens sem correspondência no Lattes ficam disponíveis para a pontuação manual/comprovação.</p>
 <form method="post" id="form-tabela">
-  <div class="sticky-save"><button class="btn primary" type="submit">Salvar valores</button></div>
+  <input type="hidden" name="grupo" id="grupo-atual" value="{{ grupo_ativo }}">
+  <div class="tabela-topo sticky-save">
+    <button class="btn primary" type="submit">Salvar valores</button>
+    <div class="actions">
+      <input type="search" id="busca" placeholder="Filtrar itens em todos os grupos…" class="busca">
+      <button class="btn" type="submit" name="acao" value="restaurar" formnovalidate
+              onclick="return confirm('Restaurar item, atividade, contagem e valor de todos os itens para o Anexo I original?')">Restaurar Anexo I</button>
+    </div>
+  </div>
+
+  <div class="gtabs" role="tablist">
+    {% for g, nome in GRUPOS.items() %}
+    <button type="button" role="tab" class="gtab {{ 'active' if g == grupo_ativo }}" data-g="{{ g }}" title="{{ nome }}">
+      <span class="gt-g">Grupo {{ g }}</span>
+      <span class="gt-v">{{ por_grupo[g]|length }} <small>itens</small></span>
+      <span class="gt-n">{{ nome }}</span>
+    </button>
+    {% endfor %}
+  </div>
+
   {% for g, nome in GRUPOS.items() %}
-  <div class="box">
+  <div class="gpanel box {{ 'active' if g == grupo_ativo }}" id="gpanel-{{ g }}" role="tabpanel">
     <h3>Grupo {{ g }} — {{ nome }}</h3>
-    <table class="tabela">
-      <thead><tr><th style="width:70px">Item</th><th>Atividade</th><th style="width:28%">Alimentado por (Lattes)</th><th class="num" style="width:90px">Referência</th><th class="num" style="width:110px">Valor</th></tr></thead>
+    <table class="tabela tabela-edit">
+      <thead><tr>
+        <th style="width:96px">Item</th>
+        <th>Atividade</th>
+        <th style="width:22%">Alimentado por (Lattes)</th>
+        <th style="width:150px">Contagem</th>
+        <th class="num" style="width:100px">Valor</th>
+      </tr></thead>
       <tbody>
       {% for it in por_grupo[g] %}
-        <tr class="item-row" data-busca="{{ (it.key ~ ' ' ~ it.atividade)|lower }}">
-          <td class="mono">{{ it.key }}</td>
-          <td>{{ it.atividade }}</td>
-          <td class="small">{% for c in cats_por_item.get(it.key, []) %}<span class="chip">{{ c }}</span>{% endfor %}</td>
-          <td class="num muted">{{ '%g'|format(it.valor_padrao) }}</td>
-          <td class="num"><input type="number" step="0.5" min="0" name="valor__{{ it.key }}" value="{{ '%g'|format(it.valor) }}" class="val {{ 'changed' if it.valor != it.valor_padrao }}"></td>
+        <tr class="item-row" data-busca="{{ (it.codigo ~ ' ' ~ it.atividade)|lower }}">
+          <td><input class="cod" name="codigo__{{ it.key }}" value="{{ it.codigo }}" maxlength="20" required></td>
+          <td><textarea class="ativ" name="atividade__{{ it.key }}" rows="2" required>{{ it.atividade }}</textarea></td>
+          <td class="small">{% for c in cats_por_item.get(it.key, []) %}<span class="chip">{{ c }}</span>{% else %}<span class="muted">—</span>{% endfor %}</td>
+          <td>
+            <select name="contagem__{{ it.key }}" class="sel">
+              {% for k, rot in CONTAGENS.items() %}<option value="{{ k }}" {{ 'selected' if (it.contagem or 'registro') == k }}>{{ rot }}</option>{% endfor %}
+            </select>
+          </td>
+          <td class="num"><input type="number" step="0.5" min="0" name="valor__{{ it.key }}" value="{{ '%g'|format(it.valor) }}" class="val"></td>
         </tr>
       {% endfor %}
       </tbody>
     </table>
   </div>
   {% endfor %}
-  <button class="btn primary" type="submit">Salvar valores</button>
+  <p class="muted small"><b>Contagem</b>: <i>por registro</i> — cada item do Lattes conta uma vez (disciplinas e blocos de 3 h contam pela quantidade);
+    <i>por ano</i> — conta os anos de duração dentro do interstício; <i>por semestre</i> — conta 2 por ano de duração dentro do interstício.
+    “Alimentado por” mostra os itens do Lattes ligados a cada item (ajustável em <a href="{{ url_for('admin_mapeamento') }}">Mapeamento</a>).</p>
 </form>
 {% endblock %}
 {% block scripts %}
 <script>
-document.getElementById('busca').addEventListener('input', e => {
-  const q = e.target.value.toLowerCase();
-  document.querySelectorAll('.item-row').forEach(r => r.style.display = r.dataset.busca.includes(q) ? '' : 'none');
+const tabs = document.querySelectorAll('.gtab'), panels = document.querySelectorAll('.gpanel');
+// caixas de atividade crescem conforme o texto
+function ajustar(el) { el.style.height = 'auto'; el.style.height = (el.scrollHeight + 2) + 'px'; }
+function ajustarVisiveis() { document.querySelectorAll('.gpanel').forEach(p => { if (p.offsetParent) p.querySelectorAll('textarea.ativ').forEach(ajustar); }); }
+document.querySelectorAll('textarea.ativ').forEach(t => t.addEventListener('input', () => ajustar(t)));
+function ativar(g) {
+  tabs.forEach(t => t.classList.toggle('active', t.dataset.g === g));
+  panels.forEach(p => p.classList.toggle('active', p.id === 'gpanel-' + g));
+  document.getElementById('grupo-atual').value = g;
+  const u = new URL(location.href); u.searchParams.set('grupo', g); history.replaceState(null, '', u);
+  ajustarVisiveis();
+}
+tabs.forEach(t => t.addEventListener('click', () => { document.getElementById('busca').value = ''; filtrar(''); ativar(t.dataset.g); }));
+// a busca procura em todos os grupos: mostra todos os painéis com resultados
+function filtrar(q) {
+  document.body.classList.toggle('buscando', !!q);
+  panels.forEach(p => {
+    let n = 0;
+    p.querySelectorAll('.item-row').forEach(r => { const ok = !q || r.dataset.busca.includes(q); r.style.display = ok ? '' : 'none'; n += ok; });
+    p.classList.toggle('sem-resultado', !!q && n === 0);
+  });
+}
+document.getElementById('busca').addEventListener('input', e => { filtrar(e.target.value.toLowerCase().trim()); ajustarVisiveis(); });
+window.addEventListener('load', ajustarVisiveis); ajustarVisiveis();
+// marca campos alterados
+document.querySelectorAll('.tabela-edit input, .tabela-edit textarea, .tabela-edit select').forEach(el => {
+  const ini = el.value; el.addEventListener('input', () => el.classList.toggle('changed', el.value !== ini));
+  el.addEventListener('change', () => el.classList.toggle('changed', el.value !== ini));
 });
 </script>
 {% endblock %}

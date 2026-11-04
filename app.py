@@ -23,7 +23,7 @@ import fotos
 from genero import inferir_genero
 from elattes_client import ELattesClient, ELattesError, extrair_xmls
 from lattes_parser import PARSER_VERSAO, parse_lattes_xml
-from scoring import CATEGORIAS, CATEGORIAS_MAP, GRUPOS, calcular_pontuacao, tabela_itens
+from scoring import CATEGORIAS, CATEGORIAS_MAP, CONTAGENS, GRUPOS, calcular_pontuacao, tabela_itens
 
 APP_NOME = "Progressão Automatizada UFPA"
 APP_SUB = "Lattes"
@@ -88,11 +88,19 @@ def init_db():
     CREATE TABLE IF NOT EXISTS mapeamento (categoria TEXT PRIMARY KEY, item_key TEXT);
     CREATE TABLE IF NOT EXISTS config (chave TEXT PRIMARY KEY, valor TEXT);
     """)
+    icols = {r["name"] for r in con.execute("PRAGMA table_info(itens)")}
+    for col in ("codigo", "contagem"):
+        if col not in icols:
+            con.execute(f"ALTER TABLE itens ADD COLUMN {col} TEXT")
+    # Insere os itens do Anexo I que ainda não existem. Itens existentes NÃO são sobrescritos:
+    # código, atividade, contagem e valor são editáveis na gestão.
     for it in tabela_itens():
-        con.execute("INSERT OR IGNORE INTO itens (key, grupo, numero, variante, atividade, valor_padrao, valor, ordem) VALUES (?,?,?,?,?,?,?,?)",
-                    (it["key"], it["grupo"], it["numero"], it["variante"], it["atividade"], it["valor_padrao"], it["valor_padrao"], it["ordem"]))
-        con.execute("UPDATE itens SET atividade=?, grupo=?, numero=?, variante=?, valor_padrao=?, ordem=? WHERE key=?",
-                    (it["atividade"], it["grupo"], it["numero"], it["variante"], it["valor_padrao"], it["ordem"], it["key"]))
+        con.execute("INSERT OR IGNORE INTO itens (key, codigo, grupo, numero, variante, atividade, contagem, valor_padrao, valor, ordem) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?)",
+                    (it["key"], it["codigo"], it["grupo"], it["numero"], it["variante"], it["atividade"], it["contagem_padrao"],
+                     it["valor_padrao"], it["valor_padrao"], it["ordem"]))
+        con.execute("UPDATE itens SET codigo=COALESCE(NULLIF(codigo,''), ?), contagem=COALESCE(NULLIF(contagem,''), ?) WHERE key=?",
+                    (it["codigo"], it["contagem_padrao"], it["key"]))
     for c in CATEGORIAS:
         con.execute("INSERT OR IGNORE INTO mapeamento (categoria, item_key) VALUES (?,?)", (c[0], c[3]))
     cols = {r["name"] for r in con.execute("PRAGMA table_info(professores)")}
@@ -636,22 +644,31 @@ def admin_tabela():
     db = get_db()
     if request.method == "POST":
         if request.form.get("acao") == "restaurar":
-            db.execute("UPDATE itens SET valor = valor_padrao")
-            flash("Valores de referência restaurados.", "ok")
+            for it in tabela_itens():
+                db.execute("UPDATE itens SET codigo=?, atividade=?, contagem=?, valor=? WHERE key=?",
+                           (it["codigo"], it["atividade"], it["contagem_padrao"], it["valor_padrao"], it["key"]))
+            flash("Tabela restaurada para o Anexo I original (item, atividade, contagem e valor).", "ok")
         else:
             n = 0
-            for k, v in request.form.items():
-                if k.startswith("valor__"):
-                    key = k[len("valor__"):]
-                    try:
-                        val = float((v or "0").replace(",", "."))
-                    except ValueError:
-                        continue
-                    db.execute("UPDATE itens SET valor=? WHERE key=?", (val, key))
+            for it in carregar_itens(db):
+                k = it["key"]
+                if f"valor__{k}" not in request.form:
+                    continue
+                try:
+                    val = float((request.form.get(f"valor__{k}") or "0").replace(",", "."))
+                except ValueError:
+                    val = it["valor"]
+                codigo = (request.form.get(f"codigo__{k}") or "").strip() or it["codigo"] or k
+                atividade = (request.form.get(f"atividade__{k}") or "").strip() or it["atividade"]
+                contagem = request.form.get(f"contagem__{k}")
+                contagem = contagem if contagem in CONTAGENS else (it["contagem"] or "registro")
+                if (val, codigo, atividade, contagem) != (it["valor"], it["codigo"], it["atividade"], it["contagem"]):
+                    db.execute("UPDATE itens SET valor=?, codigo=?, atividade=?, contagem=? WHERE key=?",
+                               (val, codigo, atividade, contagem, k))
                     n += 1
-            flash(f"{n} valores salvos.", "ok")
+            flash(f"{n} item(ns) alterado(s)." if n else "Nenhuma alteração.", "ok")
         db.commit()
-        return redirect(url_for("admin_tabela"))
+        return redirect(url_for("admin_tabela", grupo=request.form.get("grupo") or None))
     itens = carregar_itens(db)
     por_grupo = {g: [i for i in itens if i["grupo"] == g] for g in GRUPOS}
     # categorias mapeadas para cada item (para mostrar o que o Lattes alimenta)
@@ -660,7 +677,9 @@ def admin_tabela():
     for c, k in mapa.items():
         if k:
             cats_por_item.setdefault(k, []).append(CATEGORIAS_MAP[c]["label"])
-    return render_template("admin_tabela.html", por_grupo=por_grupo, cats_por_item=cats_por_item)
+    grupo_ativo = request.args.get("grupo") if request.args.get("grupo") in GRUPOS else "I"
+    return render_template("admin_tabela.html", por_grupo=por_grupo, cats_por_item=cats_por_item,
+                           CONTAGENS=CONTAGENS, grupo_ativo=grupo_ativo)
 
 
 @app.route("/admin/mapeamento", methods=["GET", "POST"])

@@ -15,8 +15,10 @@ Ferramenta web (Flask + SQLite) que:
 4. **Camada de gestão** (`/admin`, usuário `admin`, senha `senha`):
    - Professores incorporados, com data da última atualização no Lattes, data de importação e status;
    - Importar (CSV/IDs via eLattes ou upload manual de zip/xml);
-   - Tabela de valores: o admin atribui o valor de cada um dos 175 itens (gradações como 24/12 viram variantes `.a/.b`);
-   - Mapeamento Lattes → Tabela: define a qual item cada tipo de registro do Lattes é associado;
+   - Tabela de valores (abas por grupo): o admin edita **item**, **atividade**, **contagem** (por registro, por ano
+     ou por semestre) e **valor** de cada um dos 175 itens (gradações como 24/12 viram variantes `.a/.b`);
+     as edições não são sobrescritas em novos deploys; "Restaurar Anexo I" volta ao original;
+   - Mapeamento Lattes → Tabela: só a relação entre cada tipo de registro do Lattes e um item da tabela;
    - Exportação CSV da pontuação de todos os professores.
 
 ## Análise por interstício e grupos

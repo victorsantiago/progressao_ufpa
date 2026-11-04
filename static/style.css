@@ -152,3 +152,16 @@ main.wrap{padding-top:22px;padding-bottom:40px}
 .avatar.mini{width:34px;height:34px}
 .nome-cel{display:flex;gap:10px;align-items:flex-start}
 .persona-form{margin:4px 0 0}.persona-form select{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:2px 4px;background:#fff;max-width:230px}
+/* tabela de valores editável */
+.tabela-topo{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.tabela-edit td{vertical-align:middle}
+.tabela-edit input.cod{width:100%;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:6px}
+.tabela-edit textarea.ativ{width:100%;font:inherit;font-size:14px;line-height:1.35;padding:6px 8px;border:1px solid var(--line);border-radius:6px;resize:vertical;min-height:44px}
+.tabela-edit input:focus,.tabela-edit textarea:focus,.tabela-edit select:focus{outline:2px solid var(--pri);outline-offset:-1px;border-color:var(--pri)}
+.tabela-edit .changed{border-color:var(--amber)!important;background:#fff8e8}
+.gt-v small{font-size:12px;font-weight:600;color:var(--muted)}
+body.buscando .gpanel{display:block;border-radius:12px;margin-bottom:12px}
+body.buscando .gpanel.sem-resultado{display:none}
+body.buscando .gtabs{opacity:.45}
+select.sel.sem-item{color:var(--muted);background:#f7faf8}
+.tabela-edit textarea.ativ{overflow:hidden}

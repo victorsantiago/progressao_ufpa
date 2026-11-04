@@ -65,7 +65,7 @@
           <span class="reg-pts none">fora do interstício</span>
         {% elif r.categoria and pontos_cat.get(r.categoria) and pontos_cat[r.categoria].item_key %}
           {% set l = pontos_cat[r.categoria] %}
-          <span class="reg-pts {{ 'off' if not l.incluido }}" title="{{ l.item_key }} – {{ l.item_atividade }}{{ ' (grupo fora da análise)' if not l.incluido }}">{{ l.item_key }} · {{ '%g'|format(l.valor) }} pt</span>
+          <span class="reg-pts {{ 'off' if not l.incluido }}" title="{{ l.item_codigo }} – {{ l.item_atividade }}{{ ' (grupo fora da análise)' if not l.incluido }}">{{ l.item_codigo }} · {{ '%g'|format(l.valor) }} pt</span>
         {% elif r.categoria %}
           <span class="reg-pts none" title="Categoria sem item mapeado">não pontua</span>
         {% endif %}
@@ -108,12 +108,12 @@
           <td>
             {% if l.registros %}<details><summary>{{ l.label }}</summary>
               <ul class="plain small">
-                {% for r in l.registros %}<li>{{ r.desc }}{% if l.modo == 'years' %} <span class="muted">— {{ '%g'|format(r.qtd_considerada) }} ano(s){% if pont.filtro %} no interstício{% endif %}</span>{% endif %}</li>{% endfor %}
+                {% for r in l.registros %}<li>{{ r.desc }}{% if l.item_key and l.contagem in ('ano', 'semestre') %} <span class="muted">— {{ '%g'|format(r.qtd_considerada) }} {{ 'ano(s)' if l.contagem == 'ano' else 'semestre(s)' }}{% if pont.filtro %} no interstício{% endif %}</span>{% endif %}</li>{% endfor %}
               </ul>
             </details>{% else %}<span class="label-sem-itens">{{ l.label }}</span>{% endif %}
             {% if l.registros_fora %}<div class="small muted">{{ l.registros|length }} no interstício · {{ l.registros_fora|length }} fora</div>{% endif %}
           </td>
-          <td class="small">{% if l.item_key %}<b>{{ l.item_key }}</b> {{ l.item_atividade }}{% else %}<i class="muted">não pontua</i>{% endif %}</td>
+          <td class="small">{% if l.item_key %}<b>{{ l.item_codigo }}</b> {{ l.item_atividade }} <span class="muted">· {{ {'registro':'por registro','ano':'por ano','semestre':'por semestre'}[l.contagem] }}</span>{% else %}<i class="muted">não pontua</i>{% endif %}</td>
           <td class="num">{{ '%g'|format(l.qtd) }}</td>
           <td class="num">{{ '%g'|format(l.valor) if l.item_key else '—' }}</td>
           <td class="num"><b>{{ '%.1f'|format(l.pontos) }}</b></td>
