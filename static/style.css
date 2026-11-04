@@ -254,3 +254,18 @@ label.inline input[type=month],.anos input[type=month]{width:160px}
 .acoes-prof .btn{display:block;width:100%;text-align:center}
 .tabela-prof td.num .small{white-space:nowrap}
 .filtro-acoes{display:flex;gap:8px;flex-wrap:wrap}
+/* mapeamento Tabela → Lattes */
+.tabela-map td{vertical-align:top}
+.lista-lattes{display:flex;flex-direction:column;gap:6px}
+.lista-lattes.vazia::before{content:"— nenhum item do Lattes (não recebe pontos automaticamente)";color:var(--muted);font-size:13px}
+.lista-sem{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:8px}
+.lista-sem.vazia{display:block}.lista-sem.vazia::before{content:"Todos os itens do Lattes estão ligados a um item da tabela."}
+.lcard{border:1px solid var(--line);border-left:3px solid var(--pri);border-radius:8px;padding:7px 9px;background:#fff}
+.lista-sem .lcard{border-left-color:#cfd3d8}
+.lcard-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.lcard-nome{font-weight:600;font-size:13.5px}
+.lista-sem .lcard-x{display:none}
+.lcard .tag-xml{margin-top:4px}
+.lcard.movido{animation:destaque 1.2s ease-out}
+select.add-lattes{margin-top:6px;width:100%;max-width:420px;padding:5px 8px;border:1px dashed var(--line);border-radius:6px;font-size:13px;color:var(--pri-d);background:#fff;cursor:pointer}
+.gtab-sem{border-top-color:#cfd3d8}

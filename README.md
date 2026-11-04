@@ -17,10 +17,11 @@ Ferramenta web (Flask + SQLite) que:
    - Importar (CSV/IDs via serviço institucional ou upload manual de zip/xml);
    - Tabela de valores (abas por grupo): o admin edita **item**, **atividade**, **contagem** (por registro, por ano
      ou por semestre) e **valor** de cada um dos 175 itens (gradações como 24/12 viram variantes `.a/.b`);
-     as edições não são sobrescritas em novos deploys; "Restaurar Anexo I" volta ao original;
+     as edições não são sobrescritas em novos deploys;
      grupos podem ser renomeados e é possível criar grupos e itens novos (e remover os criados);
-   - Mapeamento Lattes → Tabela: só a relação entre cada tipo de registro do Lattes e um item da tabela,
-     com o caminho da tag no XML do Lattes abaixo de cada item;
+   - Mapeamento Tabela → Lattes: cada item da tabela (em abas por grupo) mostra à direita os itens
+     do Lattes que o alimentam, com o caminho da tag no XML; é possível desligar (✕) ou ligar outro
+     item do Lattes; os que não alimentam nenhum item ficam na aba "Não pontuam";
    - Exportação CSV da pontuação de todos os professores.
 
 ## Análise por interstício e grupos

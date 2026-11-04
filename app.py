@@ -1019,23 +1019,47 @@ def _adicionar_grupo(db, nome):
 @app.route("/admin/mapeamento", methods=["GET", "POST"])
 @login_required
 def admin_mapeamento():
+    """Mapeamento Tabela → Lattes: cada item da tabela recebe os itens do Lattes que o alimentam.
+    (Cada item do Lattes alimenta no máximo um item da tabela; grava-se categoria → item.)"""
     db = get_db()
+    itens = carregar_itens(db)
+    chaves = {i["key"] for i in itens}
     if request.method == "POST":
+        destino = request.form.get("grupo") or None
         if request.form.get("acao") == "restaurar":
             for c in CATEGORIAS:
                 db.execute("UPDATE mapeamento SET item_key=? WHERE categoria=?", (c[3], c[0]))
             flash("Mapeamento padrão restaurado.", "ok")
         else:
+            n = 0
+            atual = carregar_mapeamento(db)
             for c in CATEGORIAS:
+                if f"map__{c[0]}" not in request.form:
+                    continue
                 v = request.form.get(f"map__{c[0]}") or None
-                db.execute("UPDATE mapeamento SET item_key=? WHERE categoria=?", (v, c[0]))
-            flash("Mapeamento salvo.", "ok")
+                v = v if v in chaves else None
+                if v != atual.get(c[0]):
+                    db.execute("UPDATE mapeamento SET item_key=? WHERE categoria=?", (v, c[0]))
+                    n += 1
+            flash(f"Mapeamento salvo ({n} alteração(ões))." if n else "Nenhuma alteração no mapeamento.", "ok")
         db.commit()
-        return redirect(url_for("admin_mapeamento"))
-    itens = carregar_itens(db)
+        return redirect(url_for("admin_mapeamento", grupo=destino))
+    grupos = carregar_grupos(db)
     mapa = carregar_mapeamento(db)
-    cats = [dict(CATEGORIAS_MAP[c[0]], atual=mapa.get(c[0])) for c in CATEGORIAS]
-    return render_template("admin_mapeamento.html", cats=cats, itens=itens)
+    cats = [dict(CATEGORIAS_MAP[c[0]], atual=(mapa.get(c[0]) if mapa.get(c[0]) in chaves else None)) for c in CATEGORIAS]
+    por_item = {}
+    for c in cats:
+        if c["atual"]:
+            por_item.setdefault(c["atual"], []).append(c)
+    sem = [c for c in cats if not c["atual"]]
+    por_grupo = {g_: [i for i in itens if i["grupo"] == g_] for g_ in grupos}
+    ligacoes = {g_: sum(len(por_item.get(i["key"], [])) for i in por_grupo[g_]) for g_ in grupos}
+    ativo = request.args.get("grupo")
+    if ativo not in grupos and ativo != "__sem":
+        ativo = next(iter(grupos), "__sem")
+    return render_template("admin_mapeamento.html", cats=cats, por_item=por_item, sem=sem, por_grupo=por_grupo,
+                           GRUPOS=grupos, ligacoes=ligacoes, grupo_ativo=ativo,
+                           itens_js={i["key"]: {"codigo": i["codigo"], "grupo": i["grupo"]} for i in itens})
 
 
 @app.route("/admin/config", methods=["GET", "POST"])

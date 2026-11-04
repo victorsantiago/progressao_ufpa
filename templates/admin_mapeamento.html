@@ -1,51 +1,159 @@
 {% extends "base.html" %}
 {% block title %}Gestão · Mapeamento{% endblock %}
+
+{% macro cartao(c, ligado) -%}
+<div class="lcard" data-cat="{{ c.key }}" data-busca="{{ (c.label ~ ' ' ~ c.tags)|lower }}">
+  <div class="lcard-top">
+    <span class="lcard-nome">{{ c.label }}</span>
+    <button type="button" class="icon-btn lcard-x" title="Desligar deste item (passa a não pontuar)">✕</button>
+  </div>
+  {% set partes, cond = c.tags|tag_partes %}
+  <div class="tag-xml" title="Caminho no XML do Lattes">
+    {% for p in partes %}<code class="tag-seg">{{ p }}</code>{% if not loop.last %}<span class="tag-sep">›</span>{% endif %}{% endfor %}
+    {% if cond %}<span class="tag-cond">{{ cond }}</span>{% endif %}
+  </div>
+</div>
+{%- endmacro %}
+
 {% block content %}
-<form method="post">
+<form method="post" id="form-map">
+  <input type="hidden" name="grupo" id="grupo-atual" value="{{ grupo_ativo }}">
+  {% for c in cats %}<input type="hidden" name="map__{{ c.key }}" id="map-{{ c.key }}" value="{{ c.atual or '' }}" data-label="{{ c.label }}">{% endfor %}
+
   <div class="tabela-topo sticky-save">
-    <button class="btn primary" type="submit">Salvar mapeamento</button>
     <div class="actions">
-      <input type="search" id="busca" placeholder="Filtrar por item ou tag do Lattes…" class="busca">
+      <button class="btn primary" type="submit">Salvar mapeamento</button>
+      <span id="aviso-mapa" class="small aviso-ordem" hidden>Alterações não salvas.</span>
+    </div>
+    <div class="actions">
+      <input type="search" id="busca" placeholder="Filtrar por item da tabela, item ou tag do Lattes…" class="busca">
       <button class="btn" type="submit" name="acao" value="restaurar" onclick="return confirm('Restaurar o mapeamento padrão?')">Restaurar padrão</button>
     </div>
   </div>
-  <div class="box">
-    <table class="tabela">
-      <thead><tr><th style="width:42%">Item do Lattes</th><th>Item da tabela</th></tr></thead>
+
+  <div class="gtabs" role="tablist">
+    {% for g, nome in GRUPOS.items() %}
+    <button type="button" role="tab" class="gtab {{ 'active' if g == grupo_ativo }}" data-g="{{ g }}">
+      <span class="gt-g">Grupo {{ g }} · <span class="cont-lig" data-g="{{ g }}">{{ ligacoes[g] }}</span> ligado(s)</span>
+      <span class="gt-nome">{{ nome }}</span>
+    </button>
+    {% endfor %}
+    <button type="button" role="tab" class="gtab gtab-sem {{ 'active' if grupo_ativo == '__sem' }}" data-g="__sem">
+      <span class="gt-g">Não pontuam · <span id="cont-sem">{{ sem|length }}</span></span>
+      <span class="gt-nome">Itens do Lattes sem item da tabela</span>
+    </button>
+  </div>
+
+  {% for g, nome in GRUPOS.items() %}
+  <div class="gpanel box {{ 'active' if g == grupo_ativo }}" id="gpanel-{{ g }}" role="tabpanel">
+    <h3>Grupo {{ g }} — {{ nome }}</h3>
+    <table class="tabela tabela-map">
+      <thead><tr><th style="width:44%">Item da tabela</th><th>Itens do Lattes que alimentam este item</th></tr></thead>
       <tbody>
-      {% for c in cats %}
-        <tr class="map-row" data-busca="{{ (c.label ~ ' ' ~ c.tags)|lower }}">
-          <td>{{ c.label }}
-            {% set partes, cond = c.tags|tag_partes %}
-            <div class="tag-xml" title="Caminho no XML do Lattes">
-              {% for p in partes %}<code class="tag-seg">{{ p }}</code>{% if not loop.last %}<span class="tag-sep">›</span>{% endif %}{% endfor %}
-              {% if cond %}<span class="tag-cond">{{ cond }}</span>{% endif %}
-            </div></td>
+      {% for it in por_grupo[g] %}
+        <tr class="map-row" data-busca="{{ (it.codigo ~ ' ' ~ it.atividade)|lower }}">
+          <td><b>{{ it.codigo }}</b> {{ it.atividade }}
+            <div class="small muted">{{ {'registro':'por registro','ano':'por ano','semestre':'por semestre'}.get(it.contagem or 'registro') }} · {{ '%g'|format(it.valor) }} pt</div></td>
           <td>
-            <select name="map__{{ c.key }}" class="sel {{ 'sem-item' if not c.atual }}">
-              <option value="">— não pontua —</option>
-              {% for g, nome in GRUPOS.items() %}
-              <optgroup label="Grupo {{ g }} — {{ nome }}">
-                {% for it in itens if it.grupo == g %}
-                <option value="{{ it.key }}" {{ 'selected' if it.key == c.atual }}>{{ it.codigo }} — {{ it.atividade[:120] }}{{ '…' if it.atividade|length > 120 }}</option>
-                {% endfor %}
-              </optgroup>
-              {% endfor %}
-            </select>
+            <div class="lista-lattes" data-item="{{ it.key }}">{% for c in por_item.get(it.key, []) %}{{ cartao(c, true) }}{% endfor %}</div>
+            <select class="add-lattes" data-item="{{ it.key }}" aria-label="Ligar item do Lattes a {{ it.codigo }}"><option value="">+ ligar item do Lattes…</option></select>
           </td>
         </tr>
+      {% else %}
+        <tr><td colspan="2" class="muted">Nenhum item neste grupo.</td></tr>
       {% endfor %}
       </tbody>
     </table>
   </div>
+  {% endfor %}
+
+  <div class="gpanel box {{ 'active' if grupo_ativo == '__sem' }}" id="gpanel-__sem" role="tabpanel">
+    <h3>Itens do Lattes que não pontuam</h3>
+    <p class="muted small" style="margin-top:-4px">Estes itens do Lattes não estão ligados a nenhum item da tabela. Para fazê-los pontuar, use “+ ligar item do Lattes…” no item da tabela desejado.</p>
+    <div class="lista-lattes lista-sem" data-item="">{% for c in sem %}{{ cartao(c, false) }}{% endfor %}</div>
+  </div>
+
+  <p class="muted small">Cada item do Lattes alimenta no máximo um item da tabela: ao ligá-lo a outro item, ele sai do anterior. Grave com “Salvar mapeamento”.</p>
 </form>
 {% endblock %}
+
 {% block scripts %}
 <script>
-document.getElementById('busca').addEventListener('input', e => {
-  const q = e.target.value.toLowerCase().trim();
-  document.querySelectorAll('.map-row').forEach(r => r.style.display = !q || r.dataset.busca.includes(q) ? '' : 'none');
-});
-document.querySelectorAll('select.sel').forEach(s => s.addEventListener('change', () => s.classList.toggle('sem-item', !s.value)));
+(function () {
+  const ITENS = {{ itens_js|tojson }};
+  const tabs = document.querySelectorAll('.gtab'), panels = document.querySelectorAll('.gpanel');
+  const aviso = document.getElementById('aviso-mapa');
+
+  function ativar(g) {
+    tabs.forEach(t => t.classList.toggle('active', t.dataset.g === g));
+    panels.forEach(p => p.classList.toggle('active', p.id === 'gpanel-' + g));
+    document.getElementById('grupo-atual').value = g;
+    const u = new URL(location.href); u.searchParams.set('grupo', g); history.replaceState(null, '', u);
+  }
+  tabs.forEach(t => t.addEventListener('click', () => { document.getElementById('busca').value = ''; filtrar(''); ativar(t.dataset.g); }));
+
+  function atualizarEstado() {
+    document.querySelectorAll('.lista-lattes').forEach(l => l.classList.toggle('vazia', !l.querySelector('.lcard')));
+    document.querySelectorAll('.cont-lig').forEach(c => {
+      c.textContent = document.querySelectorAll(`#gpanel-${CSS.escape(c.dataset.g)} .lista-lattes .lcard`).length;
+    });
+    document.getElementById('cont-sem').textContent = document.querySelectorAll('.lista-sem .lcard').length;
+  }
+
+  function mover(cat, itemKey) {
+    const card = document.querySelector(`.lcard[data-cat="${CSS.escape(cat)}"]`);
+    const destino = document.querySelector(`.lista-lattes[data-item="${CSS.escape(itemKey || '')}"]`);
+    if (!card || !destino) return;
+    destino.appendChild(card);
+    document.getElementById('map-' + cat).value = itemKey || '';
+    card.classList.remove('movido'); void card.offsetWidth; card.classList.add('movido');
+    aviso.hidden = false;
+    atualizarEstado();
+  }
+
+  // ✕ desliga o item do Lattes (vai para "Não pontuam")
+  document.addEventListener('click', e => {
+    const x = e.target.closest('.lcard-x'); if (!x) return;
+    mover(x.closest('.lcard').dataset.cat, '');
+  });
+
+  // seletor "+ ligar": opções montadas na hora, com a situação atual de cada item do Lattes
+  function montarOpcoes(sel) {
+    const alvo = sel.dataset.item, sem = [], outros = [];
+    document.querySelectorAll('input[id^="map-"]').forEach(inp => {
+      const cat = inp.id.slice(4), atual = inp.value, label = inp.dataset.label;
+      if (atual === alvo) return;
+      if (!atual) sem.push([cat, label]);
+      else outros.push([cat, `${label} (hoje em ${ITENS[atual] ? ITENS[atual].codigo : atual})`]);
+    });
+    const grupo = (rot, lista) => lista.length ? `<optgroup label="${rot}">` + lista.map(([v, t]) => `<option value="${v}">${t.replace(/</g, '&lt;')}</option>`).join('') + '</optgroup>' : '';
+    sel.innerHTML = '<option value="">+ ligar item do Lattes…</option>' + grupo('Sem item da tabela', sem) + grupo('Ligados a outro item (serão movidos)', outros);
+  }
+  document.querySelectorAll('select.add-lattes').forEach(sel => {
+    ['focus', 'mousedown'].forEach(ev => sel.addEventListener(ev, () => montarOpcoes(sel)));
+    sel.addEventListener('change', () => { if (sel.value) { mover(sel.value, sel.dataset.item); } sel.value = ''; });
+  });
+
+  // busca em todos os grupos: por item da tabela ou por item/tag do Lattes
+  function filtrar(q) {
+    document.body.classList.toggle('buscando', !!q);
+    panels.forEach(p => {
+      let n = 0;
+      p.querySelectorAll('.map-row').forEach(r => {
+        const ok = !q || r.dataset.busca.includes(q) || [...r.querySelectorAll('.lcard')].some(c => c.dataset.busca.includes(q));
+        r.style.display = ok ? '' : 'none'; n += ok;
+      });
+      if (p.id === 'gpanel-__sem') {
+        p.querySelectorAll('.lcard').forEach(c => { const ok = !q || c.dataset.busca.includes(q); c.style.display = ok ? '' : 'none'; n += ok; });
+      }
+      p.classList.toggle('sem-resultado', !!q && n === 0);
+    });
+  }
+  document.getElementById('busca').addEventListener('input', e => filtrar(e.target.value.toLowerCase().trim()));
+
+  window.addEventListener('beforeunload', e => { if (!aviso.hidden) { e.preventDefault(); e.returnValue = ''; } });
+  document.getElementById('form-map').addEventListener('submit', () => { aviso.hidden = true; });
+  atualizarEstado();
+})();
 </script>
 {% endblock %}
