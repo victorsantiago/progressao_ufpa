@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Início{% endblock %} · {{ APP_NOME }}</title>
+<link rel="icon" href="{{ url_for('favicon') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header class="topbar">
+  <div class="wrap">
+    <a class="brand" href="{{ url_for('index') }}">
+      {% if tem_logo %}<img class="brand-logo {{ 'sem-fundo' if logo_fundo == 'sem' }}" src="{{ url_for('logo') }}?v={{ logo_versao }}" alt="UFPA">{% else %}<span class="logo">P</span>{% endif %}
+      <span class="brand-txt"><span class="brand-nome">{{ APP_NOME }}</span><span class="brand-sub">{{ APP_SUB }} · progressão funcional docente</span></span>
+    </a>
+    <nav>
+      <a href="{{ url_for('index') }}" class="{{ 'active' if request.endpoint in ('index', 'professor') }}">Professores</a>
+      {% if session.get('admin') %}
+        <a href="{{ url_for('admin_professores') }}" class="{{ 'active' if request.path.startswith('/admin') }}">Gestão</a>
+        <a href="{{ url_for('admin_logout') }}">Sair</a>
+      {% else %}
+        <a href="{{ url_for('admin_login') }}">Gestão</a>
+      {% endif %}
+    </nav>
+  </div>
+</header>
+{% if request.path.startswith('/admin') and session.get('admin') %}
+<div class="subnav"><div class="wrap">
+  <a href="{{ url_for('admin_professores') }}" class="{{ 'active' if request.path.startswith('/admin/professores') }}">Professores</a>
+  <a href="{{ url_for('admin_importar') }}" class="{{ 'active' if request.path.startswith('/admin/importar') }}">Importar</a>
+  <a href="{{ url_for('admin_tabela') }}" class="{{ 'active' if request.path.startswith('/admin/tabela') }}">Tabela de valores</a>
+  <a href="{{ url_for('admin_mapeamento') }}" class="{{ 'active' if request.path.startswith('/admin/mapeamento') }}">Mapeamento Lattes → Tabela</a>
+  <a href="{{ url_for('admin_config') }}" class="{{ 'active' if request.path.startswith('/admin/config') }}">Configuração</a>
+</div></div>
+{% endif %}
+<main class="wrap">
+  {% with msgs = get_flashed_messages(with_categories=true) %}
+    {% for cat, m in msgs %}<div class="flash {{ cat }}">{{ m }}</div>{% endfor %}
+  {% endwith %}
+  {% block content %}{% endblock %}
+</main>
+<footer class="wrap foot">{{ APP_NOME }} ({{ APP_SUB }}) · Fonte: Plataforma Lattes/CNPq · Tabela: Anexo I – Quadro de Atividades Referenciais</footer>
+{% block scripts %}{% endblock %}
+</body>
+</html>

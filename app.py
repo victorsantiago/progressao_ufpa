@@ -220,31 +220,23 @@ def _num(v):
         return None
 
 
-def pontuacao_necessaria(con=None):
-    """Pontuação necessária para a progressão (Tabela de valores). None = não informada."""
-    return _num(cfg("pontuacao_necessaria", "", con))
-
-
 GRUPO_ENSINO = "I"
-TETO_ENSINO = 0.5  # Grupo I não pode exceder 50% da pontuação necessária
+TETO_ENSINO = 0.5  # Grupo I não pode exceder 50% da pontuação total
 
 
 def situacao(pont, fl, con=None):
-    """Aplica o teto do Grupo I e compara o total com a pontuação necessária.
-    Devolve também o total ajustado (Grupo I limitado a 50% da pontuação necessária)."""
-    nec = pontuacao_necessaria(con)
-    bruto_i = pont["totais_grupo"].get(GRUPO_ENSINO, 0.0)
+    """Regra do Anexo I: o Grupo I (ensino) não pode exceder 50% da pontuação total.
+    Com I ≤ 50% de (I + demais), o Grupo I conta no máximo o valor da soma dos demais grupos considerados.
+    Devolve o total ajustado e o detalhe do Grupo I."""
+    bruto_i = round(pont["totais_grupo"].get(GRUPO_ENSINO, 0.0), 2)
     considera_i = GRUPO_ENSINO in fl["grupos"]
-    teto = nec * TETO_ENSINO if nec is not None else None
-    excedente = max(0.0, bruto_i - teto) if (teto is not None and considera_i) else 0.0
-    total_ajustado = round(pont["total"] - excedente, 2)
-    out = {"necessaria": nec, "teto_i": teto, "grupo_i": bruto_i, "grupo_i_considerado": round(bruto_i - excedente, 2),
-           "excedente_i": round(excedente, 2), "considera_i": considera_i, "total": total_ajustado,
-           "definido": nec is not None}
-    if nec is not None:
-        out.update({"ok": total_ajustado >= nec, "falta": round(max(0.0, nec - total_ajustado), 2),
-                    "pct": min(100.0, 100.0 * total_ajustado / nec) if nec else 100.0})
-    return out
+    demais = round(pont["total"] - bruto_i, 2) if considera_i else round(pont["total"], 2)
+    teto = round(demais * TETO_ENSINO / (1 - TETO_ENSINO), 2)  # = demais, para 50%
+    excedente = round(max(0.0, bruto_i - teto), 2) if considera_i else 0.0
+    total = round(pont["total"] - excedente, 2)
+    return {"grupo_i": bruto_i, "grupo_i_considerado": round(bruto_i - excedente, 2), "teto_i": teto,
+            "demais": demais, "excedente_i": excedente, "considera_i": considera_i and bruto_i > 0, "total": total,
+            "pct_i": round(100.0 * (bruto_i - excedente) / total, 1) if total else 0.0}
 
 
 def G():
@@ -637,7 +629,7 @@ def professor(pid):
                            fl["grupos"][0] if fl["grupos"] else "I")
     return render_template("professor.html", prof=prof, cv=parsed, pont=pont, por_grupo=por_grupo, fl=fl,
                            fl_query=filtros_query(fl), pontos_cat=pontos_cat, status=status_atualizacao(prof),
-                           aba=request.args.get("aba", "curriculo"), grupo_ativo=grupo_ativo, sit=sit, grafico=grafico)
+                           aba=request.args.get("aba", "pontuacao"), grupo_ativo=grupo_ativo, sit=sit, grafico=grafico)
 
 
 # Paleta categórica de referência (ordem fixa; nunca reciclada). Grupos além do 8º viram "Outros grupos".
@@ -928,7 +920,6 @@ def admin_tabela():
             cats_por_item.setdefault(k, []).append(CATEGORIAS_MAP[c]["label"])
     grupo_ativo = request.args.get("grupo") if request.args.get("grupo") in grupos else next(iter(grupos), "")
     return render_template("admin_tabela.html", por_grupo=por_grupo, cats_por_item=cats_por_item, GRUPOS=grupos,
-                           pont_necessaria=pontuacao_necessaria(db),
                            originais=originais, CONTAGENS=CONTAGENS, grupo_ativo=grupo_ativo)
 
 
@@ -939,12 +930,6 @@ def _salvar_edicoes_tabela(db):
         novo = (request.form.get(f"grupo_nome__{cod}") or "").strip()
         if novo and novo != nome:
             db.execute("UPDATE grupos SET nome=? WHERE codigo=?", (novo, cod))
-            n += 1
-    if "pontuacao_necessaria" in request.form:
-        pn = _num(request.form.get("pontuacao_necessaria"))
-        if pn != pontuacao_necessaria(db):
-            db.execute("INSERT INTO config (chave, valor) VALUES ('pontuacao_necessaria', ?) "
-                       "ON CONFLICT(chave) DO UPDATE SET valor=excluded.valor", ("" if pn is None else f"{pn:g}",))
             n += 1
     # nova ordem dentro de cada grupo (reaproveita os números de ordem do próprio grupo)
     itens_todos = carregar_itens(db)
@@ -1184,13 +1169,12 @@ def admin_exportar():
     w = csv.writer(out, delimiter=";")
     w.writerow([descreve_filtros(fl)])
     w.writerow(["id_lattes", "nome", "atualizacao_lattes", "importado_em", "status"]
-               + [f"Grupo {g}{'' if g in fl['grupos'] else ' (fora da análise)'}" for g in G()] + ["Total considerado", "Grupo I considerado (teto 50%)", "Total ajustado", "Progressão"])
+               + [f"Grupo {g}{'' if g in fl['grupos'] else ' (fora da análise)'}" for g in G()] + ["Total bruto", "Grupo I considerado (máx. 50% do total)", "Total considerado"])
     for p in profs:
         _, pont, _ = _montar_pontuacao(p, fl, itens, mapa)
         w.writerow([p["id"], p["nome"], p["data_atualizacao_br"], fmt_dt(p["importado_em"]), status_atualizacao(p)]
                    + [f"{pont['totais_grupo'][g]:.1f}".replace(".", ",") for g in G()] + [f"{pont['total']:.1f}".replace(".", ",")]
-                   + (lambda st: [f"{st['grupo_i_considerado']:.1f}".replace(".", ","), f"{st['total']:.1f}".replace(".", ","),
-                                  ("atingiu" if st["ok"] else "não atingiu") if st["definido"] else ""])(situacao(pont, fl, db)))
+                   + (lambda st: [f"{st['grupo_i_considerado']:.1f}".replace(".", ","), f"{st['total']:.1f}".replace(".", ",")])(situacao(pont, fl, db)))
     sufixo = f"_{fl['ini'] or 'inicio'}_a_{fl['fim'] or 'atual'}" if (fl["ini"] or fl["fim"]) else ""
     return app.response_class(out.getvalue().encode("utf-8-sig"), mimetype="text/csv",
                               headers={"Content-Disposition": f"attachment; filename=pontuacao_professores{sufixo}.csv"})

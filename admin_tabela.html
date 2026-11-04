@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block title %}Gestão · Tabela de valores{% endblock %}
+{% block content %}
+<form method="post" id="form-tabela">
+  <input type="hidden" name="grupo" id="grupo-atual" value="{{ grupo_ativo }}">
+  <div class="tabela-topo sticky-save">
+    <div class="actions"><button class="btn primary" type="submit" name="acao" value="salvar">Salvar valores</button>
+      <span id="aviso-ordem" class="small aviso-ordem" hidden>Ordem alterada — clique em Salvar valores para gravar.</span></div>
+    <div class="actions">
+      <input type="search" id="busca" placeholder="Filtrar itens em todos os grupos…" class="busca">
+      <button class="btn" type="submit" name="acao" value="restaurar" formnovalidate
+              onclick="return confirm('Restaurar nome dos grupos e item, atividade, contagem e valor de todos os itens do Anexo I? Grupos e itens criados por você serão mantidos.')">Restaurar Anexo I</button>
+    </div>
+  </div>
+
+  <div class="gtabs gtabs-wrap" role="tablist">
+    {% for g, nome in GRUPOS.items() %}
+    <button type="button" role="tab" class="gtab {{ 'active' if g == grupo_ativo }}" data-g="{{ g }}">
+      <span class="gt-g">Grupo {{ g }} · {{ por_grupo[g]|length }} {{ 'item' if por_grupo[g]|length == 1 else 'itens' }}</span>
+      <span class="gt-nome" id="tabnome-{{ g }}">{{ nome }}</span>
+    </button>
+    {% endfor %}
+    <button type="button" role="tab" class="gtab gtab-novo {{ 'active' if not grupo_ativo }}" data-g="__novo">
+      <span class="gt-g">Novo</span>
+      <span class="gt-nome">+ Novo grupo</span>
+    </button>
+  </div>
+
+  {% for g, nome in GRUPOS.items() %}
+  <div class="gpanel box {{ 'active' if g == grupo_ativo }}" id="gpanel-{{ g }}" role="tabpanel">
+    <div class="grupo-cab">
+      <label class="grupo-nome">Grupo {{ g }} — nome
+        <input name="grupo_nome__{{ g }}" value="{{ nome }}" data-g="{{ g }}" required maxlength="200">
+      </label>
+      {% if g not in originais %}
+      <button class="btn tiny danger" type="submit" name="acao" value="del_grupo:{{ g }}" formnovalidate
+              onclick="return confirm('Remover o grupo {{ g }} e todos os seus itens?')">Remover grupo</button>
+      {% endif %}
+    </div>
+    <table class="tabela tabela-edit" data-grupo="{{ g }}">
+      <thead><tr>
+        <th style="width:96px">Item</th>
+        <th>Atividade</th>
+        <th style="width:21%">Alimentado por (Lattes)</th>
+        <th style="width:150px">Contagem</th>
+        <th class="num" style="width:96px">Valor</th>
+        <th style="width:96px"></th>
+      </tr></thead>
+      <tbody>
+      {% for it in por_grupo[g] %}
+        {% set mv = it.codigo|regex_variante(g) %}
+        <tr class="item-row" data-busca="{{ (it.codigo ~ ' ' ~ it.atividade)|lower }}" data-bloco="{{ ('v:' ~ mv) if mv else ('k:' ~ it.key) }}">
+          <td><input class="cod" name="codigo__{{ it.key }}" value="{{ it.codigo }}" maxlength="20" required>
+              <input type="hidden" class="pos" name="pos__{{ it.key }}" value="{{ loop.index }}"></td>
+          <td><textarea class="ativ" name="atividade__{{ it.key }}" rows="2" required>{{ it.atividade }}</textarea></td>
+          <td class="small">{% for c in cats_por_item.get(it.key, []) %}<span class="chip">{{ c }}</span>{% else %}<span class="muted">—</span>{% endfor %}</td>
+          <td>
+            <select name="contagem__{{ it.key }}" class="sel">
+              {% for k, rot in CONTAGENS.items() %}<option value="{{ k }}" {{ 'selected' if (it.contagem or 'registro') == k }}>{{ rot }}</option>{% endfor %}
+            </select>
+          </td>
+          <td class="num"><input type="number" step="0.5" min="0" name="valor__{{ it.key }}" value="{{ '%g'|format(it.valor) }}" class="val"></td>
+          <td class="acoes-item"><button class="icon-btn mover" type="button" data-dir="-1" title="Mover para cima">▲</button><button class="icon-btn mover" type="button" data-dir="1" title="Mover para baixo">▼</button><button class="icon-btn del" type="submit" name="acao" value="del_item:{{ it.key }}" formnovalidate title="Remover item {{ it.codigo }}"
+                      onclick="return confirm('Remover o item {{ it.codigo }}?{{ ' Ele recebe itens do Lattes no Mapeamento, que deixarão de pontuar.' if cats_por_item.get(it.key) }}')">✕</button></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="muted">Nenhum item neste grupo.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <button class="btn" type="submit" name="acao" value="add_item:{{ g }}" style="margin-top:10px">+ Adicionar item</button>
+  </div>
+  {% endfor %}
+
+  <div class="gpanel box {{ 'active' if not grupo_ativo }}" id="gpanel-__novo" role="tabpanel">
+    <h3>Novo grupo</h3>
+    <p class="muted small">O grupo recebe o próximo número romano disponível e já vem com um item para você editar. Ele entra na análise padrão (Configuração) e aparece nos filtros do perfil.</p>
+    <div class="anos">
+      <label class="grupo-nome" style="flex:1">Nome do grupo
+        <input name="novo_grupo_nome" maxlength="200" placeholder="Ex.: Atividades de internacionalização">
+      </label>
+      <button class="btn primary" type="submit" name="acao" value="add_grupo" formnovalidate>Criar grupo</button>
+    </div>
+  </div>
+
+  <p class="muted small"><b>Contagem</b>: <i>por registro</i> — cada item do Lattes conta uma vez (disciplinas e blocos de 3 h contam pela quantidade);
+    <i>por ano</i> — conta os anos de duração dentro do interstício; <i>por semestre</i> — conta 2 por ano de duração dentro do interstício.
+    “Alimentado por” mostra os itens do Lattes ligados a cada item (ajustável em <a href="{{ url_for('admin_mapeamento') }}">Mapeamento</a>).
+    Grupos do Anexo I podem ser renomeados; grupos criados por você também podem ser removidos.
+    O Grupo I (ensino) é limitado a 50% da pontuação total no cálculo.</p>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+const tabs = document.querySelectorAll('.gtab'), panels = document.querySelectorAll('.gpanel');
+function ajustar(el) { el.style.height = 'auto'; el.style.height = (el.scrollHeight + 2) + 'px'; }
+function ajustarVisiveis() { panels.forEach(p => { if (p.offsetParent) p.querySelectorAll('textarea.ativ').forEach(ajustar); }); }
+document.querySelectorAll('textarea.ativ').forEach(t => t.addEventListener('input', () => ajustar(t)));
+function ativar(g) {
+  tabs.forEach(t => t.classList.toggle('active', t.dataset.g === g));
+  panels.forEach(p => p.classList.toggle('active', p.id === 'gpanel-' + g));
+  document.getElementById('grupo-atual').value = g === '__novo' ? '' : g;
+  const u = new URL(location.href); if (g === '__novo') u.searchParams.delete('grupo'); else u.searchParams.set('grupo', g);
+  history.replaceState(null, '', u);
+  ajustarVisiveis();
+  if (g === '__novo') document.querySelector('input[name=novo_grupo_nome]').focus();
+}
+tabs.forEach(t => t.addEventListener('click', () => { document.getElementById('busca').value = ''; filtrar(''); ativar(t.dataset.g); }));
+function filtrar(q) {
+  document.body.classList.toggle('buscando', !!q);
+  panels.forEach(p => {
+    if (p.id === 'gpanel-__novo') { p.classList.toggle('sem-resultado', !!q); return; }
+    let n = 0;
+    p.querySelectorAll('.item-row').forEach(r => { const ok = !q || r.dataset.busca.includes(q); r.style.display = ok ? '' : 'none'; n += ok; });
+    p.classList.toggle('sem-resultado', !!q && n === 0);
+  });
+}
+document.getElementById('busca').addEventListener('input', e => { filtrar(e.target.value.toLowerCase().trim()); ajustarVisiveis(); });
+// nome do grupo editado atualiza a aba na hora
+document.querySelectorAll('input[name^=grupo_nome__]').forEach(i => i.addEventListener('input', () => {
+  document.getElementById('tabnome-' + i.dataset.g).textContent = i.value || '(sem nome)';
+}));
+// Enter no nome do novo grupo cria o grupo (e não "salvar valores")
+document.querySelector('input[name=novo_grupo_nome]').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); document.querySelector('button[value=add_grupo]').click(); }
+});
+document.querySelectorAll('.tabela-edit input, .tabela-edit textarea, .tabela-edit select, .grupo-nome input').forEach(el => {
+  const ini = el.value; const f = () => el.classList.toggle('changed', el.value !== ini);
+  el.addEventListener('input', f); el.addEventListener('change', f);
+});
+// ---- mover itens e renumerar códigos (variantes como I.6.a/I.6.b andam juntas) ----
+function blocos(tbody) {
+  const out = [];
+  tbody.querySelectorAll('tr.item-row').forEach(r => {
+    const ult = out[out.length - 1];
+    if (ult && ult.id === r.dataset.bloco) ult.linhas.push(r); else out.push({ id: r.dataset.bloco, linhas: [r] });
+  });
+  return out;
+}
+function renumerar(tbody) {
+  const g = tbody.closest('table').dataset.grupo;
+  blocos(tbody).forEach((b, i) => b.linhas.forEach((r, j) => {
+    const cod = r.querySelector('input.cod');
+    const novo = b.linhas.length > 1 ? `${g}.${i + 1}.${String.fromCharCode(97 + j)}` : `${g}.${i + 1}`;
+    if (cod.value !== novo) { cod.value = novo; cod.classList.add('changed'); }
+  }));
+  tbody.querySelectorAll('tr.item-row').forEach((r, i) => r.querySelector('input.pos').value = i + 1);
+  r_busca(tbody);
+}
+function r_busca(tbody) {
+  tbody.querySelectorAll('tr.item-row').forEach(r => r.dataset.busca = (r.querySelector('input.cod').value + ' ' + r.querySelector('textarea.ativ').value).toLowerCase());
+}
+document.querySelectorAll('button.mover').forEach(btn => btn.addEventListener('click', () => {
+  const linha = btn.closest('tr'), tbody = linha.parentElement, dir = +btn.dataset.dir;
+  const bs = blocos(tbody), i = bs.findIndex(b => b.linhas.includes(linha)), alvo = bs[i + dir];
+  if (!alvo) return;
+  const meu = bs[i].linhas;
+  if (dir < 0) meu.forEach(r => tbody.insertBefore(r, alvo.linhas[0]));
+  else { let ref = alvo.linhas[alvo.linhas.length - 1].nextSibling; meu.forEach(r => tbody.insertBefore(r, ref)); }
+  renumerar(tbody);
+  meu.forEach(r => { r.classList.remove('movido'); void r.offsetWidth; r.classList.add('movido'); });
+  document.getElementById('aviso-ordem').hidden = false;
+  btn.focus();
+}));
+window.addEventListener('load', ajustarVisiveis); ajustarVisiveis();
+</script>
+{% endblock %}

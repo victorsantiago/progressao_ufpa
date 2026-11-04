@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Gestão · Mapeamento{% endblock %}
+{% block content %}
+<form method="post">
+  <div class="tabela-topo sticky-save">
+    <button class="btn primary" type="submit">Salvar mapeamento</button>
+    <div class="actions">
+      <input type="search" id="busca" placeholder="Filtrar por item ou tag do Lattes…" class="busca">
+      <button class="btn" type="submit" name="acao" value="restaurar" onclick="return confirm('Restaurar o mapeamento padrão?')">Restaurar padrão</button>
+    </div>
+  </div>
+  <div class="box">
+    <table class="tabela">
+      <thead><tr><th style="width:42%">Item do Lattes</th><th>Item da tabela</th></tr></thead>
+      <tbody>
+      {% for c in cats %}
+        <tr class="map-row" data-busca="{{ (c.label ~ ' ' ~ c.tags)|lower }}">
+          <td>{{ c.label }}
+            {% set partes, cond = c.tags|tag_partes %}
+            <div class="tag-xml" title="Caminho no XML do Lattes">
+              {% for p in partes %}<code class="tag-seg">{{ p }}</code>{% if not loop.last %}<span class="tag-sep">›</span>{% endif %}{% endfor %}
+              {% if cond %}<span class="tag-cond">{{ cond }}</span>{% endif %}
+            </div></td>
+          <td>
+            <select name="map__{{ c.key }}" class="sel {{ 'sem-item' if not c.atual }}">
+              <option value="">— não pontua —</option>
+              {% for g, nome in GRUPOS.items() %}
+              <optgroup label="Grupo {{ g }} — {{ nome }}">
+                {% for it in itens if it.grupo == g %}
+                <option value="{{ it.key }}" {{ 'selected' if it.key == c.atual }}>{{ it.codigo }} — {{ it.atividade[:120] }}{{ '…' if it.atividade|length > 120 }}</option>
+                {% endfor %}
+              </optgroup>
+              {% endfor %}
+            </select>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+document.getElementById('busca').addEventListener('input', e => {
+  const q = e.target.value.toLowerCase().trim();
+  document.querySelectorAll('.map-row').forEach(r => r.style.display = !q || r.dataset.busca.includes(q) ? '' : 'none');
+});
+document.querySelectorAll('select.sel').forEach(s => s.addEventListener('change', () => s.classList.toggle('sem-item', !s.value)));
+</script>
+{% endblock %}

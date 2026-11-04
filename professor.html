@@ -1,0 +1,253 @@
+{% extends "base.html" %}
+{% block title %}{{ cv.dados.nome }}{% endblock %}
+{% block content %}
+{% set filtro = pont.filtro %}
+<div class="profile-head">
+  {% with av_id=prof.id, av_nome=cv.dados.nome, av_genero=genero_de(prof), av_classe='big' %}{% include "_avatar.html" %}{% endwith %}
+  <div class="profile-info">
+    <h1>{{ cv.dados.nome }}</h1>
+    <div class="muted">ID Lattes {{ prof.id }}{% if cv.dados.orcid %} · ORCID {{ cv.dados.orcid }}{% endif %}
+      · <a href="https://lattes.cnpq.br/{{ prof.id }}" target="_blank" rel="noopener">Lattes ↗</a></div>
+    <div class="muted small">Lattes atualizado em <b>{{ prof.data_atualizacao_br }}</b> · importado em {{ prof.importado_em|fmt_dt }}</div>
+    <div class="score-badge"><b>{{ '%.1f'|format(sit.total) }}</b> pontos <span class="score-ctx">{{ descreve_filtros(fl) }}</span></div>
+  </div>
+  <div class="profile-actions">
+    <form method="post" action="{{ url_for('professor_atualizar', pid=prof.id) }}" id="form-atualizar">
+      <button type="submit" id="btn-status" class="btn-status {{ status }}" {% if status == 'atualizado' %}disabled{% endif %}>
+        {% if status == 'atualizado' %}✓ Currículo Atualizado{% else %}⟳ Atualizar{% endif %}
+      </button>
+    </form>
+    <div class="small muted" id="btn-hint">
+      {% if status == 'desatualizado' %}Nova versão no Lattes: {{ prof.remota_atualizacao }}{% elif status == 'desconhecido' %}Verificando versão do Lattes…{% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="box filtros-box">
+  {% with filtros_action=url_for('professor', pid=prof.id), filtros_hidden={'aba': aba, 'grupo': grupo_ativo} %}{% include "_filtros.html" %}{% endwith %}
+</div>
+
+<div class="tabs">
+  <button class="tab {{ 'active' if aba == 'pontuacao' }}" data-tab="pontuacao">Pontuação</button>
+  <button class="tab {{ 'active' if aba == 'curriculo' }}" data-tab="curriculo">Currículo</button>
+</div>
+
+<!-- ===================== ABA CURRÍCULO ===================== -->
+<section id="tab-curriculo" class="tab-panel {{ 'active' if aba == 'curriculo' }}">
+  {% if filtro %}<p class="aviso small">Itens fora do interstício ({{ descreve_periodo(fl) }}) aparecem esmaecidos.</p>{% endif %}
+  {% if cv.dados.resumo %}<div class="box"><h3>Resumo</h3><p class="resumo">{{ cv.dados.resumo }}</p></div>{% endif %}
+  {% if cv.dados.areas %}<div class="box"><h3>Áreas de atuação</h3><ul class="plain">{% for a in cv.dados.areas %}<li>{{ a }}</li>{% endfor %}</ul></div>{% endif %}
+  {% if cv.dados.idiomas %}<div class="box"><h3>Idiomas</h3><ul class="plain">{% for i in cv.dados.idiomas %}<li><b>{{ i.idioma }}</b> — compreende {{ i.compreensao|lower }}, fala {{ i.fala|lower }}, lê {{ i.leitura|lower }}, escreve {{ i.escrita|lower }}</li>{% endfor %}</ul></div>{% endif %}
+
+  <div class="toc">
+    {% for s in cv.secoes if s.registros %}<a href="#sec-{{ s.key }}">{{ s.titulo }} <span class="count">{{ s.registros|length }}</span></a>{% endfor %}
+  </div>
+
+  {% for s in cv.secoes if s.registros %}
+  <div class="box" id="sec-{{ s.key }}">
+    <h3>{{ s.titulo }} <span class="count">{{ s.registros|length }}</span></h3>
+    <ol class="registros">
+      {% for r in s.registros %}
+      {% set lo = fl.ai or -999999 %}{% set hi = fl.af or 999999 %}
+      {% set fora = filtro and (r.ini is none or r.ini > hi or r.fim < lo) %}
+      <li class="reg {{ 'fora' if fora }}">
+        <div class="reg-main">
+          <span class="reg-ano">{{ r.ano or '—' }}</span>
+          <div>
+            <div class="reg-titulo">{{ r.titulo }}</div>
+            {% if r.autores %}<div class="reg-autores">{{ r.autores|join('; ') }}</div>{% endif %}
+            {% if r.subtitulo %}<div class="reg-sub">{{ r.subtitulo }}</div>{% endif %}
+            {% set det = r.detalhes.items()|selectattr('1')|list %}
+            {% if det %}<details class="reg-det"><summary>detalhes</summary><dl>{% for k, v in det %}<dt>{{ k }}</dt><dd>{{ v }}</dd>{% endfor %}</dl></details>{% endif %}
+          </div>
+        </div>
+        {% if fora %}
+          <span class="reg-pts none">fora do interstício</span>
+        {% elif r.categoria and pontos_cat.get(r.categoria) and pontos_cat[r.categoria].item_key %}
+          {% set l = pontos_cat[r.categoria] %}
+          <span class="reg-pts {{ 'off' if not l.incluido }}" title="{{ l.item_codigo }} – {{ l.item_atividade }}{{ ' (grupo fora da análise)' if not l.incluido }}">{{ l.item_codigo }} · {{ '%g'|format(l.valor) }} pt</span>
+        {% elif r.categoria %}
+          <span class="reg-pts none" title="Categoria sem item mapeado">não pontua</span>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+  </div>
+  {% endfor %}
+</section>
+
+<!-- ===================== ABA PONTUAÇÃO ===================== -->
+<section id="tab-pontuacao" class="tab-panel {{ 'active' if aba == 'pontuacao' }}">
+  <div class="total-banner">
+    <div class="tb-topo">
+      <div><div class="tb-rot">Total considerado</div><div class="tb-v">{{ '%.1f'|format(sit.total) }} <span>pontos</span></div></div>
+      <div class="tb-ctx">{{ descreve_filtros(fl) }}</div>
+    </div>
+    {% if sit.considera_i %}
+    <div class="tb-meta-txt tb-regra">
+      <b>Grupo I (ensino)</b> limitado a 50% da pontuação total:
+      {% if sit.excedente_i > 0 %}obteve {{ '%.1f'|format(sit.grupo_i) }}, considerados <b>{{ '%.1f'|format(sit.grupo_i_considerado) }}</b>
+        (igual à soma dos demais grupos, {{ '%.1f'|format(sit.demais) }}; −{{ '%.1f'|format(sit.excedente_i) }} pts).
+      {% else %}{{ '%.1f'|format(sit.grupo_i) }} pts = {{ '%.1f'|format(sit.pct_i) }}% do total, dentro do limite.{% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+  {% if grafico.tem_dados %}
+  <div class="box grafico-box">
+    <div class="grafico-cab">
+      <h3>Evolução por ano — <span id="grafico-titulo">Grupo {{ grupo_ativo }}</span></h3>
+      <div class="grafico-modo" role="group" aria-label="O que o gráfico mostra">
+        <button type="button" class="chip-btn active" data-modo="grupo">Grupo selecionado</button>
+        <button type="button" class="chip-btn" data-modo="todos">Grupos considerados (empilhado)</button>
+      </div>
+    </div>
+    <p class="small muted" style="margin:0 0 6px">Todo o histórico do Lattes.{% if pont.filtro %} Anos fora do interstício em cinza.{% endif %} <span id="grafico-aviso"></span></p>
+    <div class="grafico-area"><canvas id="grafico-evolucao" aria-label="Pontos por grupo e por ano" role="img"></canvas></div>
+    <details class="grafico-tabela"><summary class="small">Ver os dados em tabela</summary>
+      <div class="tabela-rolagem"><table class="tabela small"><thead><tr id="grafico-tabela-cab"></tr></thead><tbody id="grafico-tabela-corpo"></tbody></table></div>
+    </details>
+  </div>
+  {% endif %}
+
+  <div class="gtabs" role="tablist">
+    {% for g, nome in GRUPOS.items() %}
+    {% set inc = g in fl.grupos %}
+    <button type="button" role="tab" class="gtab {{ 'active' if g == grupo_ativo }} {{ '' if inc else 'excluido' }}" data-g="{{ g }}" title="{{ nome }}{{ '' if inc else ' — fora da análise' }}">
+      <span class="gt-g">Grupo {{ g }}{% if not inc %} · fora da análise{% endif %}</span>
+      <span class="gt-v">{{ '%.1f'|format(pont.totais_grupo.get(g, 0)) }} <small>pts</small></span>
+      <span class="gt-nome">{{ nome }}</span>
+    </button>
+    {% endfor %}
+  </div>
+
+  {% for g, nome in GRUPOS.items() %}
+  {% set linhas = por_grupo[g] %}
+  {% set inc = g in fl.grupos %}
+  <div class="gpanel box {{ 'active' if g == grupo_ativo }} {{ '' if inc else 'grupo-off' }}" id="gpanel-{{ g }}" role="tabpanel">
+    <h3>Grupo {{ g }} — {{ nome }} <span class="count">{{ '%.1f'|format(pont.totais_grupo.get(g, 0)) }} pts</span>{% if not inc %} <span class="pill desconhecido">fora da análise — não soma no total</span>{% endif %}</h3>
+    {% if not linhas %}<p class="muted">Nenhum item do Lattes neste grupo.</p>{% else %}
+    <table class="tabela">
+      <thead><tr><th>Item do Lattes</th><th>Item da tabela</th><th class="num">Qtd.</th><th class="num">Valor</th><th class="num">Pontos</th></tr></thead>
+      <tbody>
+      {% for l in linhas %}
+        <tr class="{{ 'zero' if (not l.item_key or l.qtd == 0) }}">
+          <td>
+            {% if l.registros %}<details><summary>{{ l.label }}</summary>
+              <ul class="plain small">
+                {% for r in l.registros %}<li>{{ r.desc }}{% if l.item_key and l.contagem in ('ano', 'semestre') %} <span class="muted">— {{ '%g'|format(r.qtd_considerada) }} {{ 'ano(s)' if l.contagem == 'ano' else 'semestre(s)' }}{% if pont.filtro %} no interstício{% endif %}</span>{% endif %}</li>{% endfor %}
+              </ul>
+            </details>{% else %}<span class="label-sem-itens">{{ l.label }}</span>{% endif %}
+            {% if l.registros_fora %}<div class="small muted">{{ l.registros|length }} no interstício · {{ l.registros_fora|length }} fora</div>{% endif %}
+          </td>
+          <td class="small">{% if l.item_key %}<b>{{ l.item_codigo }}</b> {{ l.item_atividade }} <span class="muted">· {{ {'registro':'por registro','ano':'por ano','semestre':'por semestre'}[l.contagem] }}</span>{% else %}<i class="muted">não pontua</i>{% endif %}</td>
+          <td class="num">{{ '%g'|format(l.qtd) }}</td>
+          <td class="num">{{ '%g'|format(l.valor) if l.item_key else '—' }}</td>
+          <td class="num"><b>{{ '%.1f'|format(l.pontos) }}</b></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+  {% endfor %}
+  <p class="muted small">Calculado a partir do XML do Lattes com os valores e o mapeamento da gestão. {% if pont.filtro %}Só entram registros cujo período intercepta o interstício; itens contados por ano consideram apenas os anos dentro dele. {% endif %}Grupos fora da análise aparecem para referência, mas não somam no total. Itens sem correspondência no Lattes (ex.: carga horária de aulas) devem ser comprovados à parte.</p>
+</section>
+{% endblock %}
+{% block scripts %}
+{% if grafico.tem_dados %}
+<script src="{{ url_for('static', filename='vendor/chart-4.4.1.umd.js') }}"></script>
+<script>
+(function () {
+  const G = {{ grafico|tojson }};
+  const el = document.getElementById('grafico-evolucao');
+  if (!el || !window.Chart) return;
+  // cinza com a mesma luminosidade da cor, clareado: fora do interstício
+  function cinza(hex) {
+    const n = parseInt(hex.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+    const l = Math.round(0.299 * r + 0.587 * g + 0.114 * b), v = Math.round(l + (255 - l) * 0.45);
+    return `rgb(${v},${v},${v})`;
+  }
+  const fmt = v => v.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+  let modo = 'grupo', grupoAtual = {{ grupo_ativo|tojson }}, chart = null;
+  function dsDe(lista) {
+    return lista.map(d => ({
+      label: d.grupo === 'outros' ? d.nome : `Grupo ${d.grupo} — ${d.nome}`, curto: d.grupo === 'outros' ? d.nome : `Grupo ${d.grupo}`,
+      data: d.valores, cor: d.cor,
+      backgroundColor: G.dentro.map(dentro => dentro ? d.cor : cinza(d.cor)),
+      borderColor: '#ffffff', borderWidth: { top: 2 }, borderRadius: 2, borderSkipped: 'bottom',
+      maxBarThickness: 46, categoryPercentage: 0.82, barPercentage: 0.9,
+    }));
+  }
+  function listaAtual() {
+    if (modo === 'todos') return G.datasets;
+    const g = G.por_grupo[grupoAtual]; return g ? [{ grupo: grupoAtual, nome: g.nome, cor: g.cor, valores: g.valores }] : [];
+  }
+  function totaisDe(lista) { return G.anos.map((_, i) => lista.reduce((s, d) => s + d.valores[i], 0)); }
+  function desenhar() {
+    const lista = listaAtual(), totais = totaisDe(lista), varios = lista.length > 1;
+    const t = document.getElementById('grafico-titulo'), av = document.getElementById('grafico-aviso');
+    if (modo === 'todos') { t.textContent = 'grupos considerados'; av.textContent = ''; }
+    else { const g = G.por_grupo[grupoAtual]; t.textContent = `Grupo ${grupoAtual} — ${g ? g.nome : ''}`;
+           av.textContent = g && !g.considerado ? 'Este grupo está fora da análise: os pontos não somam no total.' : ''; }
+    const cfg = {
+      type: 'bar', data: { labels: G.anos.map(String), datasets: dsDe(lista) },
+      options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false },
+        scales: { x: { stacked: true, grid: { display: false }, ticks: { color: '#5f5150' } },
+                  y: { stacked: true, beginAtZero: true, grid: { color: '#efe7e7' }, border: { display: false },
+                       ticks: { color: '#76605f', callback: v => fmt(v) }, title: { display: true, text: 'pontos', color: '#76605f' } } },
+        plugins: {
+          legend: { display: varios, position: 'bottom', labels: { boxWidth: 12, boxHeight: 12, color: '#2a1b1d',
+            generateLabels: ch => ch.data.datasets.map((d, i) => ({ text: d.label.length > 48 ? d.label.slice(0, 46) + '…' : d.label,
+              fillStyle: d.cor, strokeStyle: d.cor, lineWidth: 0, hidden: !ch.isDatasetVisible(i), datasetIndex: i })) } },
+          tooltip: { filter: it => it.raw > 0, itemSort: (a, b) => b.datasetIndex - a.datasetIndex, callbacks: {
+            title: its => its.length ? `${its[0].label}${G.dentro[its[0].dataIndex] ? '' : ' · fora do interstício'}` : '',
+            label: it => ` ${it.dataset.curto}: ${fmt(it.raw)} pts`,
+            labelColor: it => ({ backgroundColor: it.dataset.cor, borderColor: it.dataset.cor }),
+            footer: its => (its.length && varios) ? `Total: ${fmt(totais[its[0].dataIndex])} pts` : '' } } } }
+    };
+    if (chart) chart.destroy();
+    chart = new Chart(el, cfg);
+    // tabela de dados acompanha
+    const tb = document.getElementById('grafico-tabela-corpo'), th = document.getElementById('grafico-tabela-cab');
+    if (tb && th) {
+      th.innerHTML = '<th>Ano</th>' + lista.map(d => `<th class="num">${d.grupo === 'outros' ? d.nome : 'Grupo ' + d.grupo}</th>`).join('') + (varios ? '<th class="num">Total</th>' : '');
+      tb.innerHTML = G.anos.map((a, i) => `<tr class="${G.dentro[i] ? '' : 'zero'}"><td>${a}</td>` + lista.map(d => `<td class="num">${fmt(d.valores[i])}</td>`).join('') + (varios ? `<td class="num"><b>${fmt(totais[i])}</b></td>` : '') + '</tr>').join('');
+    }
+  }
+  document.querySelectorAll('.grafico-modo .chip-btn').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('.grafico-modo .chip-btn').forEach(x => x.classList.remove('active')); b.classList.add('active');
+    modo = b.dataset.modo; desenhar();
+  }));
+  document.querySelectorAll('.gtab').forEach(t => t.addEventListener('click', () => { grupoAtual = t.dataset.g; if (modo === 'grupo') desenhar(); }));
+  desenhar();
+})();
+</script>
+{% endif %}
+<script>
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+  document.querySelectorAll('.tab, .tab-panel').forEach(e => e.classList.remove('active'));
+  t.classList.add('active'); document.getElementById('tab-' + t.dataset.tab).classList.add('active');
+  const u = new URL(location.href); u.searchParams.set('aba', t.dataset.tab); history.replaceState(null, '', u);
+  const h = document.querySelector('.filtros input[name=aba]'); if (h) h.value = t.dataset.tab;
+}));
+document.querySelectorAll('.gtab').forEach(t => t.addEventListener('click', () => {
+  document.querySelectorAll('.gtab, .gpanel').forEach(e => e.classList.remove('active'));
+  t.classList.add('active'); document.getElementById('gpanel-' + t.dataset.g).classList.add('active');
+  const u = new URL(location.href); u.searchParams.set('grupo', t.dataset.g); history.replaceState(null, '', u);
+  const h = document.querySelector('.filtros input[name=grupo]'); if (h) h.value = t.dataset.g;
+}));
+// Verifica se há versão mais nova do Lattes e ajusta o botão
+(async () => {
+  const btn = document.getElementById('btn-status'), hint = document.getElementById('btn-hint');
+  try {
+    const r = await fetch("{{ url_for('api_verificar', pid=prof.id) }}");
+    const d = await r.json();
+    btn.classList.remove('atualizado', 'desatualizado', 'desconhecido');
+    if (d.status === 'atualizado') { btn.classList.add('atualizado'); btn.textContent = '✓ Currículo Atualizado'; btn.disabled = true; hint.textContent = 'Versão mais recente do Lattes (' + d.remota + ')'; }
+    else if (d.status === 'desatualizado') { btn.classList.add('desatualizado'); btn.textContent = '⟳ Atualizar'; btn.disabled = false; hint.textContent = 'Nova versão no Lattes: ' + d.remota; }
+    else { btn.classList.add('desconhecido'); btn.textContent = '⟳ Atualizar'; btn.disabled = false; hint.textContent = 'Não foi possível verificar a versão do Lattes agora.'; hint.title = d.erro || ''; }
+  } catch (e) { hint.textContent = 'Não foi possível verificar a versão do Lattes.'; }
+})();
+</script>
+{% endblock %}

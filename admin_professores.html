@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Gestão · Professores{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Professores incorporados <span class="count">{{ profs|length }}</span></h1>
+  <div class="actions">
+    <form method="post" action="{{ url_for('admin_verificar_todos') }}"><button class="btn">Verificar atualizações no Lattes</button></form>
+    <form method="post" action="{{ url_for('admin_atualizar_desatualizados') }}"><button class="btn">Atualizar todos os desatualizados</button></form>
+    <a class="btn" href="{{ url_for('admin_exportar') }}?{{ fl_query }}">Exportar pontuação (CSV)</a>
+    <a class="btn primary" href="{{ url_for('admin_importar') }}">+ Importar</a>
+  </div>
+</div>
+
+<div class="box filtros-box">
+  {% with filtros_action=url_for('admin_professores'), filtros_hidden={'ordem': ordem} %}{% include "_filtros.html" %}{% endwith %}
+</div>
+
+{% if jobs %}
+<details class="box">
+  <summary><b>Importações recentes</b> <span class="count">{{ jobs|length }}</span></summary>
+  <table class="tabela small" style="margin-top:8px">
+    <thead><tr><th>Início</th><th>Origem</th><th>IDs</th><th>Importados</th><th>Erros</th><th>Status</th><th></th></tr></thead>
+    <tbody>{% for j in jobs %}
+      <tr><td>{{ j.criado_em|fmt_dt }}</td><td>{{ j.origem }}</td><td>{{ j.total }}</td><td>{{ j.importados|length }}</td><td>{{ j.erros|length }}</td>
+          <td><span class="pill {{ 'atualizado' if j.status == 'concluido' else ('desatualizado' if j.status == 'erro' else 'desconhecido') }}">{{ j.status }}</span></td>
+          <td><a href="{{ url_for('job_page', job_id=j.id) }}">ver</a></td></tr>
+    {% endfor %}</tbody>
+  </table>
+</details>
+{% endif %}
+
+<div class="box tabela-prof">
+<table class="tabela">
+  <thead><tr>
+    <th><a href="{{ url_for('admin_professores') }}?{{ fl_query }}&ordem=nome">Nome{{ ' ▾' if ordem == 'nome' }}</a></th>
+    <th>ID Lattes</th><th>Última atualização (Lattes)</th><th>Importado em</th><th>Versão no Lattes</th><th>Status</th>
+    <th class="num"><a href="{{ url_for('admin_professores') }}?{{ fl_query }}&ordem=pontos">Pontos{{ ' ▾' if ordem == 'pontos' }}</a></th>
+    <th></th></tr></thead>
+  <tbody>
+  {% for p in profs %}
+    {% set st = status_atualizacao(p) %}
+    <tr>
+      <td>
+        <div class="nome-cel">
+          {% with av_id=p.id, av_nome=p.nome, av_genero=genero_de(p), av_classe='mini' %}{% include "_avatar.html" %}{% endwith %}
+          <div>
+            <a href="{{ url_for('professor', pid=p.id) }}?{{ fl_query }}&aba=pontuacao">{{ p.nome }}</a>
+            <form method="post" action="{{ url_for('admin_persona', pid=p.id) }}" class="persona-form">
+              {% set auto = inferir_genero(p.nome) %}
+              <select name="genero" onchange="this.form.submit()" title="Avatar exibido no perfil">
+                <option value="" {{ 'selected' if p.genero_manual not in ('M','F','N') }}>Avatar: automático ({{ {'M':'masculino','F':'feminino','N':'neutro'}[auto] }})</option>
+                <option value="M" {{ 'selected' if p.genero_manual == 'M' }}>Avatar: masculino</option>
+                <option value="F" {{ 'selected' if p.genero_manual == 'F' }}>Avatar: feminino</option>
+                <option value="N" {{ 'selected' if p.genero_manual == 'N' }}>Avatar: neutro</option>
+              </select>
+            </form>
+          </div>
+        </div>
+      </td>
+      <td class="mono">{{ p.id }}</td>
+      <td>{{ p.data_atualizacao_br or '—' }}</td>
+      <td>{{ p.importado_em|fmt_dt }}</td>
+      <td>{{ p.remota_atualizacao or '—' }}</td>
+      <td><span class="pill {{ st }}">{{ {'atualizado':'Atualizado','desatualizado':'Desatualizado','desconhecido':'Não verificado'}[st] }}</span></td>
+      <td class="num"><b>{{ '%.1f'|format(p.sit.total) }}</b>{% if p.sit.excedente_i > 0 %}<div class="muted small" title="Grupo I limitado a 50% da pontuação total">bruto {{ '%.1f'|format(p.total) }}</div>{% endif %}</td>
+      <td class="acoes-col"><div class="acoes-prof">
+        <form method="post" action="{{ url_for('professor_atualizar', pid=p.id) }}"><button class="btn tiny">Reimportar</button></form>
+        <form method="post" action="{{ url_for('admin_remover', pid=p.id) }}" onsubmit="return confirm('Remover {{ p.nome }}?')"><button class="btn tiny danger">Remover</button></form>
+      </div></td>
+    </tr>
+  {% else %}
+    <tr><td colspan="8" class="muted">Nenhum professor importado. <a href="{{ url_for('admin_importar') }}">Importar agora.</a></td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p class="muted small" style="margin:10px 0 0">Pontos calculados para: {{ descreve_filtros(fl) }}.</p>
+</div>
+{% endblock %}

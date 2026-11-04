@@ -31,10 +31,9 @@ Ferramenta web (Flask + SQLite) que:
   ensino, cargos, conselhos, estágios, participação em projetos e textos em jornal; a maior parte da
   produção (artigos, eventos, bancas, orientações) traz só o ano — nesse caso vale de janeiro a dezembro.
 - Itens contados por ano/semestre são proporcionais aos meses dentro do interstício (18 meses = 1,5 ano).
-- **Pontuação necessária**: em Gestão → Tabela de valores o admin informa a pontuação necessária para a
-  progressão. Regra aplicada: o Grupo I (ensino) não pode exceder 50% desse valor — o excedente é
-  descontado do total. O perfil mostra o total ajustado, se a pontuação necessária foi atingida e o
-  detalhe do Grupo I; a lista da gestão e o CSV trazem a coluna "Progressão".
+- **Regra do Grupo I**: as atividades de ensino não podem exceder 50% da pontuação total. Na prática, o
+  Grupo I conta no máximo a soma dos demais grupos considerados; o excedente é descontado. O perfil mostra
+  o total já ajustado e o detalhe do Grupo I; a lista da gestão e o CSV trazem total bruto e considerado.
 - Ao escolher o mês/ano inicial do interstício, o final passa automaticamente para o mesmo mês 2 anos
   depois (o final pode ser alterado livremente sem mexer no inicial).
 - **Evolução por ano**: gráfico de barras empilhadas por grupo com todo o histórico do Lattes; anos fora do

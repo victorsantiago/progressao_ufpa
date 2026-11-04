@@ -1,0 +1,45 @@
+{# Formulário de filtros da análise. Espera: fl, filtros_action, filtros_hidden (dict opcional) #}
+<form class="filtros" method="get" action="{{ filtros_action }}">
+  <input type="hidden" name="f" value="1">
+  {% for k, v in (filtros_hidden or {}).items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+  <div class="filtros-linha">
+    <div class="filtro-bloco">
+      <span class="filtro-rot">Interstício avaliado</span>
+      <div class="anos">
+        <label class="inline">de <input type="month" name="ini" min="1950-01" max="2100-12" value="{{ fl.ini or '' }}" title="Mês e ano inicial"></label>
+        <label class="inline">a <input type="month" name="fim" min="1950-01" max="2100-12" value="{{ fl.fim or '' }}" title="Mês e ano final"></label>
+      </div>
+      <div class="presets">
+        {% for rot, pi, pf in presets_intersticio() %}<button type="button" class="chip-btn" data-ini="{{ pi }}" data-fim="{{ pf }}" title="{{ pi[5:] }}/{{ pi[:4] }} a {{ pf[5:] }}/{{ pf[:4] }}">{{ rot }}</button>{% endfor %}
+        <button type="button" class="chip-btn" data-ini="" data-fim="">Todo o currículo</button>
+      </div>
+    </div>
+    <div class="filtro-bloco">
+      <span class="filtro-rot">Grupos considerados</span>
+      <div class="grupos-check">
+        {% for g, nome in GRUPOS.items() %}
+        <label class="gchk" title="{{ nome }}"><input type="checkbox" name="g" value="{{ g }}" {{ 'checked' if g in fl.grupos }}><span>{{ g }}</span></label>
+        {% endfor %}
+        <button type="button" class="link-btn" data-todos="1">todos</button>
+        <button type="button" class="link-btn" data-todos="0">nenhum</button>
+      </div>
+    </div>
+    <div class="filtro-acoes">
+      <button class="btn primary" type="submit">Aplicar</button>
+    </div>
+  </div>
+</form>
+<script>
+(function () {
+  const f = document.currentScript.previousElementSibling;
+  // ao escolher o início, o fim passa a ser o mesmo mês 2 anos depois; mudar o fim não altera o início
+  const mais2 = v => { const m = /^(\d{4})-(\d{2})$/.exec(v || ''); return m ? `${+m[1] + 2}-${m[2]}` : null; };
+  ['input', 'change'].forEach(ev => f.ini.addEventListener(ev, () => { const v = mais2(f.ini.value); if (v) f.fim.value = v; }));
+  f.querySelectorAll('.chip-btn').forEach(b => b.addEventListener('click', () => {
+    f.ini.value = b.dataset.ini; f.fim.value = b.dataset.fim; f.submit();
+  }));
+  f.querySelectorAll('.link-btn').forEach(b => b.addEventListener('click', () => {
+    f.querySelectorAll('input[name=g]').forEach(c => c.checked = b.dataset.todos === '1');
+  }));
+})();
+</script>

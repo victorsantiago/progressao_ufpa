@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Professores{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Professores</h1>
+  <input type="search" id="busca" placeholder="Buscar por nome ou ID Lattes…" class="busca">
+</div>
+{% if not profs %}
+  <div class="empty">Nenhum currículo importado ainda. Entre em <a href="{{ url_for('admin_login') }}">Gestão → Importar</a>.</div>
+{% endif %}
+<div class="cards" id="lista">
+{% for p in profs %}
+  {% set st = status_atualizacao(p) %}
+  <a class="card" href="{{ url_for('professor', pid=p.id) }}" data-busca="{{ (p.nome ~ ' ' ~ p.id)|lower }}">
+    {% with av_id=p.id, av_nome=p.nome, av_genero=genero_de(p), av_classe='' %}{% include "_avatar.html" %}{% endwith %}
+    <div class="card-body">
+      <div class="card-title">{{ p.nome }}</div>
+      <div class="card-sub">ID Lattes {{ p.id }}</div>
+      <div class="card-meta">Lattes atualizado em {{ p.data_atualizacao_br or '—' }} · importado {{ p.importado_em|fmt_dt }}</div>
+    </div>
+    <span class="pill {{ st }}">{{ {'atualizado':'Atualizado','desatualizado':'Desatualizado','desconhecido':'Não verificado'}[st] }}</span>
+  </a>
+{% endfor %}
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+document.getElementById('busca').addEventListener('input', e => {
+  const q = e.target.value.toLowerCase();
+  document.querySelectorAll('#lista .card').forEach(c => c.style.display = c.dataset.busca.includes(q) ? '' : 'none');
+});
+</script>
+{% endblock %}

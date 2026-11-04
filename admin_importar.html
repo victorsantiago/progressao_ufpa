@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Gestão · Importar{% endblock %}
+{% block content %}
+<h1>Importar currículos</h1>
+<div class="grid2">
+  <div class="box">
+    <h3>1. Download automático</h3>
+    <p class="muted small">Envie um CSV com os IDs Lattes dos professores (qualquer coluna; todos os números de 16 dígitos são reconhecidos) e/ou digite IDs abaixo. A plataforma baixa o currículo de cada ID, extrai o XML e importa.</p>
+    <form method="post" action="{{ url_for('admin_importar_elattes') }}" enctype="multipart/form-data">
+      <label>Arquivo CSV<input type="file" name="csv" accept=".csv,.txt"></label>
+      <label>IDs Lattes (um por linha ou separados por vírgula)<textarea name="ids" rows="5" placeholder="9157422386900321">9157422386900321</textarea></label>
+      <button class="btn primary" type="submit">Baixar e importar currículos</button>
+    </form>
+  </div>
+  <div class="box">
+    <h3>2. Via arquivo (manual)</h3>
+    <p class="muted small">Se preferir, envie aqui o arquivo do currículo (o zip baixado, o zip individual <code>&lt;id&gt;.zip</code> ou o <code>.xml</code>).</p>
+    <form method="post" action="{{ url_for('admin_importar_arquivo') }}" enctype="multipart/form-data">
+      <label>Arquivo .zip ou .xml<input type="file" name="arquivo" accept=".zip,.xml" required></label>
+      <button class="btn" type="submit">Importar arquivo</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

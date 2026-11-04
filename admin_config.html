@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Gestão · Configuração{% endblock %}
+{% block content %}
+<h1>Configuração</h1>
+<div class="grid2">
+  <div class="box">
+    <h3>Análise padrão</h3>
+    <p class="muted small">Interstício e grupos usados quando um perfil ou a lista de professores é aberta sem filtro. Cada página pode mudar a análise na hora, sem alterar este padrão. Informe mês e ano inicial e final; deixe em branco para considerar todo o currículo.</p>
+    <form method="post">
+      <input type="hidden" name="acao" value="analise">
+      <div class="anos" style="margin-bottom:12px">
+        <label class="inline">Interstício de <input type="month" name="interst_ini" value="{{ fl.ini or '' }}"></label>
+        <label class="inline">a <input type="month" name="interst_fim" value="{{ fl.fim or '' }}"></label>
+      </div>
+      <span class="filtro-rot">Grupos considerados</span>
+      <ul class="plain grupos-lista">
+        {% for g, nome in GRUPOS.items() %}
+        <li><label class="inline"><input type="checkbox" name="g" value="{{ g }}" {{ 'checked' if g in fl.grupos }}> <b>Grupo {{ g }}</b> — {{ nome }}</label></li>
+        {% endfor %}
+      </ul>
+      <button class="btn primary" type="submit">Salvar análise padrão</button>
+    </form>
+  </div>
+
+  <div>
+    <div class="box">
+      <h3>Logo</h3>
+      <p class="muted small">Envie a logo oficial da UFPA (PNG ou SVG, preferencialmente com fundo transparente). Ela aparece no cabeçalho e como ícone da aba e fica guardada no disco do servidor.</p>
+      {% if tem_logo %}<div class="logo-preview no-cabecalho"><img class="brand-logo {{ 'sem-fundo' if logo_fundo == 'sem' }}" src="{{ url_for('logo') }}?v={{ logo_versao }}" alt="Logo atual"><span>Prévia no cabeçalho</span></div>{% endif %}
+      <form method="post" enctype="multipart/form-data">
+        <input type="hidden" name="acao" value="logo">
+        <label>Arquivo da logo<input type="file" name="logo" accept=".png,.svg,.jpg,.jpeg,.webp" required></label>
+        <button class="btn primary" type="submit">Enviar logo</button>
+      </form>
+      {% if tem_logo %}
+      <form method="post" class="logo-fundo-form">
+        <input type="hidden" name="acao" value="logo_fundo">
+        <label class="inline">Fundo no cabeçalho
+          <select name="logo_fundo" onchange="this.form.submit()">
+            <option value="auto" {{ 'selected' if logo_fundo_escolha not in ('selo','sem') }}>Automático ({{ 'sem fundo' if logo_fundo == 'sem' else 'selo branco' }})</option>
+            <option value="sem" {{ 'selected' if logo_fundo_escolha == 'sem' }}>Sem fundo — para logo branca</option>
+            <option value="selo" {{ 'selected' if logo_fundo_escolha == 'selo' }}>Selo branco — para logo colorida</option>
+          </select>
+        </label>
+      </form>
+      <form method="post" style="margin-top:8px"><input type="hidden" name="acao" value="remover_logo"><button class="btn tiny danger" type="submit">Remover logo</button></form>
+      {% endif %}
+    </div>
+
+    <div class="box">
+      <h3>Fotos dos professores</h3>
+      <p class="muted small">A foto vem do serviço oficial de fotos do CNPq (a mesma exibida no Lattes). É buscada na primeira visualização do perfil, reduzida e guardada no servidor; ao reimportar o currículo, é buscada de novo. Sem foto, aparece a inicial do nome.</p>
+      <form method="post">
+        <input type="hidden" name="acao" value="fotos">
+        <label class="inline" style="margin-bottom:8px"><input type="checkbox" name="exibir_fotos" value="1" {{ 'checked' if fotos_on }}> Exibir fotos do Lattes</label><br>
+        <label class="inline" style="margin-bottom:12px"><input type="checkbox" name="limpar" value="1"> Apagar fotos guardadas (buscar de novo)</label><br>
+        <button class="btn" type="submit">Salvar</button>
+      </form>
+    </div>
+
+    <div class="box">
+      <h3>Fonte dos currículos</h3>
+      <form method="post">
+        <label>URL do serviço de download dos currículos<input name="elattes_url" value="{{ elattes_url }}"></label>
+        <p class="muted small">Serviço institucional que fornece o XML do Currículo Lattes a partir do ID.</p>
+        <button class="btn" type="submit">Salvar</button>
+      </form>
+    </div>
+
+    <div class="box">
+      <h3>Credenciais</h3>
+      <p class="muted small">Definidas pelas variáveis de ambiente <code>ADMIN_USER</code> e <code>ADMIN_PASS</code> (no Render: serviço → Environment).</p>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function(){ const i=document.querySelector('input[name=interst_ini]'), f=document.querySelector('input[name=interst_fim]'); if(!i||!f) return;
+  const mais2 = v => { const m=/^(\d{4})-(\d{2})$/.exec(v||''); return m ? `${+m[1]+2}-${m[2]}` : null; };
+  ['input','change'].forEach(ev => i.addEventListener(ev, () => { const v = mais2(i.value); if (v) f.value = v; })); })();
+</script>
+{% endblock %}
