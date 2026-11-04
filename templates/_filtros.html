@@ -25,6 +25,8 @@
       </div>
     </div>
     <div class="filtro-acoes">
+      {% if filtros_pdf %}<button class="btn" type="submit" formaction="{{ filtros_pdf }}" formtarget="_blank"
+              title="Relatório com os itens e pontuações do interstício e dos grupos marcados">Gerar relatório (PDF)</button>{% endif %}
       <button class="btn primary" type="submit">Aplicar</button>
     </div>
   </div>

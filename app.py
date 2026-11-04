@@ -14,6 +14,7 @@ import os
 import re
 import sqlite3
 import threading
+import unicodedata
 import uuid
 
 from flask import (Flask, abort, flash, g, jsonify, redirect, render_template, request,
@@ -355,7 +356,7 @@ def _ctx():
     return {"tem_logo": logo_path()[0] is not None, "ANO_ATUAL": dt.date.today().year, "GRUPOS": G(),
             "logo_fundo": logo_fundo(), "logo_fundo_escolha": cfg("logo_fundo", "auto"),
             "logo_versao": int(os.path.getmtime(logo_path()[0])) if logo_path()[0] else 0,
-            "fotos_on": cfg("exibir_fotos", "1") == "1"}
+            "fotos_on": False}  # busca de fotos no CNPq desativada (avatares no lugar)
 
 
 # ---------------------------------------------------------------------------
@@ -666,6 +667,27 @@ def dados_grafico(parsed, itens, fl):
             "tem_dados": any(any(v["valores"]) for v in por_grupo.values())}
 
 
+@app.route("/professor/<pid>/relatorio.pdf")
+def relatorio_pdf(pid):
+    """Relatório em PDF com os itens e pontuações do interstício e dos grupos escolhidos."""
+    from relatorio import gerar_pdf
+    db = get_db()
+    prof = db.execute("SELECT * FROM professores WHERE id=?", (pid,)).fetchone()
+    if not prof:
+        abort(404)
+    fl = ler_filtros()
+    parsed, pont, _ = _montar_pontuacao(prof, fl)
+    sit = situacao(pont, fl)
+    lp, ext = logo_path()
+    pdf = gerar_pdf(prof=prof, cv=parsed, pont=pont, sit=sit, fl=fl, grupos=G(), periodo_txt=descreve_periodo(fl),
+                    app_nome=APP_NOME, logo_path=lp, logo_ext=ext, logo_selo=(logo_fundo() == "selo"))
+    nome = re.sub(r"[^A-Za-z0-9]+", "_", unicodedata.normalize("NFKD", parsed["dados"].get("nome", pid))
+                  .encode("ascii", "ignore").decode()).strip("_") or pid
+    periodo = f"_{fl['ini'] or 'inicio'}_a_{fl['fim'] or 'atual'}" if (fl["ini"] or fl["fim"]) else "_todo_curriculo"
+    return app.response_class(pdf, mimetype="application/pdf",
+                              headers={"Content-Disposition": f'inline; filename="relatorio_{nome}{periodo}.pdf"'})
+
+
 @app.route("/professor/<pid>/xml")
 def professor_xml(pid):
     path = os.path.join(XML_DIR, f"{pid}.xml")
@@ -853,60 +875,45 @@ def admin_tabela():
     if request.method == "POST":
         acao = request.form.get("acao") or "salvar"
         destino = request.form.get("grupo") or None
-        if acao == "restaurar":
-            for i, (cod, nome) in enumerate(GRUPOS_ANEXO.items(), 1):
-                db.execute("INSERT OR IGNORE INTO grupos (codigo, nome, ordem, original) VALUES (?,?,?,1)", (cod, nome, i))
-                db.execute("UPDATE grupos SET nome=? WHERE codigo=?", (nome, cod))
-            for it in tabela_itens():
-                db.execute("INSERT OR IGNORE INTO itens (key, codigo, grupo, numero, variante, atividade, contagem, valor_padrao, valor, ordem) "
-                           "VALUES (?,?,?,?,?,?,?,?,?,?)",
-                           (it["key"], it["codigo"], it["grupo"], it["numero"], it["variante"], it["atividade"],
-                            it["contagem_padrao"], it["valor_padrao"], it["valor_padrao"], it["ordem"]))
-                db.execute("UPDATE itens SET codigo=?, atividade=?, contagem=?, valor=?, grupo=?, ordem=?, numero=? WHERE key=?",
-                           (it["codigo"], it["atividade"], it["contagem_padrao"], it["valor_padrao"], it["grupo"], it["ordem"],
-                            it["numero"], it["key"]))
-            flash("Grupos e itens do Anexo I restaurados (nome, item, atividade, contagem e valor). "
-                  "Grupos e itens criados por você foram mantidos.", "ok")
-        else:
-            n = _salvar_edicoes_tabela(db)
-            msg = f"{n} alteração(ões) salva(s)." if n else ""
-            if acao.startswith("add_item:"):
-                grp = acao.split(":", 1)[1]
-                if grp in carregar_grupos(db):
-                    _adicionar_item(db, grp)
-                    destino = grp
-                    msg = (msg + " Item adicionado no fim do grupo.").strip()
-            elif acao.startswith("del_item:"):
-                key = acao.split(":", 1)[1]
-                row = db.execute("SELECT codigo, grupo FROM itens WHERE key=?", (key,)).fetchone()
-                if row:
-                    db.execute("DELETE FROM itens WHERE key=?", (key,))
-                    db.execute("UPDATE mapeamento SET item_key=NULL WHERE item_key=?", (key,))
-                    renumerar_grupo(db, row["grupo"])
-                    destino = row["grupo"]
-                    msg = (msg + f" Item {row['codigo']} removido.").strip()
-            elif acao == "add_grupo":
-                nome = (request.form.get("novo_grupo_nome") or "").strip()
-                if not nome:
-                    flash("Informe o nome do novo grupo.", "erro")
-                else:
-                    destino = _adicionar_grupo(db, nome)
-                    msg = (msg + f" Grupo {destino} criado.").strip()
-            elif acao.startswith("del_grupo:"):
-                cod = acao.split(":", 1)[1]
-                row = db.execute("SELECT original FROM grupos WHERE codigo=?", (cod,)).fetchone()
-                if row and not row["original"]:
-                    keys = [r["key"] for r in db.execute("SELECT key FROM itens WHERE grupo=?", (cod,))]
-                    for k in keys:
-                        db.execute("UPDATE mapeamento SET item_key=NULL WHERE item_key=?", (k,))
-                    db.execute("DELETE FROM itens WHERE grupo=?", (cod,))
-                    db.execute("DELETE FROM grupos WHERE codigo=?", (cod,))
-                    padrao = [x for x in (cfg("grupos", "", db) or "").split(",") if x and x != cod]
-                    db.execute("UPDATE config SET valor=? WHERE chave='grupos'", (",".join(padrao),))
-                    destino = None
-                    msg = (msg + f" Grupo {cod} removido.").strip()
-            if msg:
-                flash(msg, "ok")
+        n = _salvar_edicoes_tabela(db)
+        msg = f"{n} alteração(ões) salva(s)." if n else ""
+        if acao.startswith("add_item:"):
+            grp = acao.split(":", 1)[1]
+            if grp in carregar_grupos(db):
+                _adicionar_item(db, grp)
+                destino = grp
+                msg = (msg + " Item adicionado no fim do grupo.").strip()
+        elif acao.startswith("del_item:"):
+            key = acao.split(":", 1)[1]
+            row = db.execute("SELECT codigo, grupo FROM itens WHERE key=?", (key,)).fetchone()
+            if row:
+                db.execute("DELETE FROM itens WHERE key=?", (key,))
+                db.execute("UPDATE mapeamento SET item_key=NULL WHERE item_key=?", (key,))
+                renumerar_grupo(db, row["grupo"])
+                destino = row["grupo"]
+                msg = (msg + f" Item {row['codigo']} removido.").strip()
+        elif acao == "add_grupo":
+            nome = (request.form.get("novo_grupo_nome") or "").strip()
+            if not nome:
+                flash("Informe o nome do novo grupo.", "erro")
+            else:
+                destino = _adicionar_grupo(db, nome)
+                msg = (msg + f" Grupo {destino} criado.").strip()
+        elif acao.startswith("del_grupo:"):
+            cod = acao.split(":", 1)[1]
+            row = db.execute("SELECT original FROM grupos WHERE codigo=?", (cod,)).fetchone()
+            if row and not row["original"]:
+                keys = [r["key"] for r in db.execute("SELECT key FROM itens WHERE grupo=?", (cod,))]
+                for k in keys:
+                    db.execute("UPDATE mapeamento SET item_key=NULL WHERE item_key=?", (k,))
+                db.execute("DELETE FROM itens WHERE grupo=?", (cod,))
+                db.execute("DELETE FROM grupos WHERE codigo=?", (cod,))
+                padrao = [x for x in (cfg("grupos", "", db) or "").split(",") if x and x != cod]
+                db.execute("UPDATE config SET valor=? WHERE chave='grupos'", (",".join(padrao),))
+                destino = None
+                msg = (msg + f" Grupo {cod} removido.").strip()
+        if msg:
+            flash(msg, "ok")
         db.commit()
         return redirect(url_for("admin_tabela", grupo=destino))
     grupos = carregar_grupos(db)

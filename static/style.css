@@ -253,3 +253,4 @@ label.inline input[type=month],.anos input[type=month]{width:160px}
 .acoes-prof form{margin:0}
 .acoes-prof .btn{display:block;width:100%;text-align:center}
 .tabela-prof td.num .small{white-space:nowrap}
+.filtro-acoes{display:flex;gap:8px;flex-wrap:wrap}

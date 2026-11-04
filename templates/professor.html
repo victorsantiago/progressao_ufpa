@@ -24,7 +24,7 @@
 </div>
 
 <div class="box filtros-box">
-  {% with filtros_action=url_for('professor', pid=prof.id), filtros_hidden={'aba': aba, 'grupo': grupo_ativo} %}{% include "_filtros.html" %}{% endwith %}
+  {% with filtros_action=url_for('professor', pid=prof.id), filtros_hidden={'aba': aba, 'grupo': grupo_ativo}, filtros_pdf=url_for('relatorio_pdf', pid=prof.id) %}{% include "_filtros.html" %}{% endwith %}
 </div>
 
 <div class="tabs">

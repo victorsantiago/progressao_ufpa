@@ -41,13 +41,19 @@ Ferramenta web (Flask + SQLite) que:
   no ano final do registro. Há uma tabela com os mesmos dados. (Chart.js 4.4.1 incluído em `static/vendor/`.)
 - Grupos desmarcados continuam visíveis, mas não somam no total.
 
-## Fotos dos professores
+## Relatório em PDF
+
+No perfil, o botão **Gerar relatório (PDF)** do bloco *Interstício avaliado* gera um relatório com o interstício e os
+grupos marcados: resumo, pontos por grupo, regra do Grupo I e o detalhamento de cada item (registros do Lattes,
+item da tabela, contagem, quantidade, valor e pontos). Gerado com reportlab.
+
+## Fotos dos professores (desativado)
 
 A foto vem do serviço oficial de fotos do CNPq (`servicosweb.cnpq.br/wspessoa/servletrecuperafoto`), que usa o
 identificador interno do CNPq (K0000000A0). Esse identificador é obtido apenas lendo o redirecionamento de
 `lattes.cnpq.br/<ID>`; o currículo não é aberto. A miniatura (320×320) fica em `DATA_DIR/fotos/` e é buscada de novo
 quando o currículo é reimportado. Sem foto, aparece a inicial; nova tentativa só após 24 h.
-Pode ser desligado em **Gestão → Configuração → Fotos dos professores**.
+Desativado: os perfis usam avatares.
 
 ## Executar
 
