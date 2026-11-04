@@ -4,7 +4,8 @@
 <form method="post" id="form-tabela">
   <input type="hidden" name="grupo" id="grupo-atual" value="{{ grupo_ativo }}">
   <div class="tabela-topo sticky-save">
-    <button class="btn primary" type="submit" name="acao" value="salvar">Salvar valores</button>
+    <div class="actions"><button class="btn primary" type="submit" name="acao" value="salvar">Salvar valores</button>
+      <span id="aviso-ordem" class="small aviso-ordem" hidden>Ordem alterada — clique em Salvar valores para gravar.</span></div>
     <div class="actions">
       <input type="search" id="busca" placeholder="Filtrar itens em todos os grupos…" class="busca">
       <button class="btn" type="submit" name="acao" value="restaurar" formnovalidate
@@ -36,19 +37,21 @@
               onclick="return confirm('Remover o grupo {{ g }} e todos os seus itens?')">Remover grupo</button>
       {% endif %}
     </div>
-    <table class="tabela tabela-edit">
+    <table class="tabela tabela-edit" data-grupo="{{ g }}">
       <thead><tr>
         <th style="width:96px">Item</th>
         <th>Atividade</th>
         <th style="width:21%">Alimentado por (Lattes)</th>
         <th style="width:150px">Contagem</th>
         <th class="num" style="width:96px">Valor</th>
-        <th style="width:34px"></th>
+        <th style="width:96px"></th>
       </tr></thead>
       <tbody>
       {% for it in por_grupo[g] %}
-        <tr class="item-row" data-busca="{{ (it.codigo ~ ' ' ~ it.atividade)|lower }}">
-          <td><input class="cod" name="codigo__{{ it.key }}" value="{{ it.codigo }}" maxlength="20" required></td>
+        {% set mv = it.codigo|regex_variante(g) %}
+        <tr class="item-row" data-busca="{{ (it.codigo ~ ' ' ~ it.atividade)|lower }}" data-bloco="{{ ('v:' ~ mv) if mv else ('k:' ~ it.key) }}">
+          <td><input class="cod" name="codigo__{{ it.key }}" value="{{ it.codigo }}" maxlength="20" required>
+              <input type="hidden" class="pos" name="pos__{{ it.key }}" value="{{ loop.index }}"></td>
           <td><textarea class="ativ" name="atividade__{{ it.key }}" rows="2" required>{{ it.atividade }}</textarea></td>
           <td class="small">{% for c in cats_por_item.get(it.key, []) %}<span class="chip">{{ c }}</span>{% else %}<span class="muted">—</span>{% endfor %}</td>
           <td>
@@ -57,7 +60,7 @@
             </select>
           </td>
           <td class="num"><input type="number" step="0.5" min="0" name="valor__{{ it.key }}" value="{{ '%g'|format(it.valor) }}" class="val"></td>
-          <td><button class="icon-btn" type="submit" name="acao" value="del_item:{{ it.key }}" formnovalidate title="Remover item {{ it.codigo }}"
+          <td class="acoes-item"><button class="icon-btn mover" type="button" data-dir="-1" title="Mover para cima">▲</button><button class="icon-btn mover" type="button" data-dir="1" title="Mover para baixo">▼</button><button class="icon-btn del" type="submit" name="acao" value="del_item:{{ it.key }}" formnovalidate title="Remover item {{ it.codigo }}"
                       onclick="return confirm('Remover o item {{ it.codigo }}?{{ ' Ele recebe itens do Lattes no Mapeamento, que deixarão de pontuar.' if cats_por_item.get(it.key) }}')">✕</button></td>
         </tr>
       {% else %}
@@ -124,6 +127,40 @@ document.querySelectorAll('.tabela-edit input, .tabela-edit textarea, .tabela-ed
   const ini = el.value; const f = () => el.classList.toggle('changed', el.value !== ini);
   el.addEventListener('input', f); el.addEventListener('change', f);
 });
+// ---- mover itens e renumerar códigos (variantes como I.6.a/I.6.b andam juntas) ----
+function blocos(tbody) {
+  const out = [];
+  tbody.querySelectorAll('tr.item-row').forEach(r => {
+    const ult = out[out.length - 1];
+    if (ult && ult.id === r.dataset.bloco) ult.linhas.push(r); else out.push({ id: r.dataset.bloco, linhas: [r] });
+  });
+  return out;
+}
+function renumerar(tbody) {
+  const g = tbody.closest('table').dataset.grupo;
+  blocos(tbody).forEach((b, i) => b.linhas.forEach((r, j) => {
+    const cod = r.querySelector('input.cod');
+    const novo = b.linhas.length > 1 ? `${g}.${i + 1}.${String.fromCharCode(97 + j)}` : `${g}.${i + 1}`;
+    if (cod.value !== novo) { cod.value = novo; cod.classList.add('changed'); }
+  }));
+  tbody.querySelectorAll('tr.item-row').forEach((r, i) => r.querySelector('input.pos').value = i + 1);
+  r_busca(tbody);
+}
+function r_busca(tbody) {
+  tbody.querySelectorAll('tr.item-row').forEach(r => r.dataset.busca = (r.querySelector('input.cod').value + ' ' + r.querySelector('textarea.ativ').value).toLowerCase());
+}
+document.querySelectorAll('button.mover').forEach(btn => btn.addEventListener('click', () => {
+  const linha = btn.closest('tr'), tbody = linha.parentElement, dir = +btn.dataset.dir;
+  const bs = blocos(tbody), i = bs.findIndex(b => b.linhas.includes(linha)), alvo = bs[i + dir];
+  if (!alvo) return;
+  const meu = bs[i].linhas;
+  if (dir < 0) meu.forEach(r => tbody.insertBefore(r, alvo.linhas[0]));
+  else { let ref = alvo.linhas[alvo.linhas.length - 1].nextSibling; meu.forEach(r => tbody.insertBefore(r, ref)); }
+  renumerar(tbody);
+  meu.forEach(r => { r.classList.remove('movido'); void r.offsetWidth; r.classList.add('movido'); });
+  document.getElementById('aviso-ordem').hidden = false;
+  btn.focus();
+}));
 window.addEventListener('load', ajustarVisiveis); ajustarVisiveis();
 </script>
 {% endblock %}

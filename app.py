@@ -239,6 +239,14 @@ def genero_de(prof):
 
 
 app.jinja_env.globals["genero_de"] = genero_de
+
+
+def regex_variante(codigo, grupo):
+    m = re.fullmatch(rf"{re.escape(grupo)}\.(\d+)\.[a-z]", codigo or "")
+    return f"{grupo}.{m.group(1)}" if m else ""
+
+
+app.jinja_env.filters["regex_variante"] = regex_variante
 app.jinja_env.globals["inferir_genero"] = inferir_genero
 
 
@@ -682,8 +690,9 @@ def admin_tabela():
                            "VALUES (?,?,?,?,?,?,?,?,?,?)",
                            (it["key"], it["codigo"], it["grupo"], it["numero"], it["variante"], it["atividade"],
                             it["contagem_padrao"], it["valor_padrao"], it["valor_padrao"], it["ordem"]))
-                db.execute("UPDATE itens SET codigo=?, atividade=?, contagem=?, valor=?, grupo=? WHERE key=?",
-                           (it["codigo"], it["atividade"], it["contagem_padrao"], it["valor_padrao"], it["grupo"], it["key"]))
+                db.execute("UPDATE itens SET codigo=?, atividade=?, contagem=?, valor=?, grupo=?, ordem=?, numero=? WHERE key=?",
+                           (it["codigo"], it["atividade"], it["contagem_padrao"], it["valor_padrao"], it["grupo"], it["ordem"],
+                            it["numero"], it["key"]))
             flash("Grupos e itens do Anexo I restaurados (nome, item, atividade, contagem e valor). "
                   "Grupos e itens criados por você foram mantidos.", "ok")
         else:
@@ -701,6 +710,7 @@ def admin_tabela():
                 if row:
                     db.execute("DELETE FROM itens WHERE key=?", (key,))
                     db.execute("UPDATE mapeamento SET item_key=NULL WHERE item_key=?", (key,))
+                    renumerar_grupo(db, row["grupo"])
                     destino = row["grupo"]
                     msg = (msg + f" Item {row['codigo']} removido.").strip()
             elif acao == "add_grupo":
@@ -749,7 +759,22 @@ def _salvar_edicoes_tabela(db):
         if novo and novo != nome:
             db.execute("UPDATE grupos SET nome=? WHERE codigo=?", (novo, cod))
             n += 1
-    for it in carregar_itens(db):
+    # nova ordem dentro de cada grupo (reaproveita os números de ordem do próprio grupo)
+    itens_todos = carregar_itens(db)
+    for grp in carregar_grupos(db):
+        do_grupo = [i for i in itens_todos if i["grupo"] == grp]
+        try:
+            pos = {i["key"]: int(request.form[f"pos__{i['key']}"]) for i in do_grupo}
+        except (KeyError, ValueError):
+            continue
+        atual = [i["key"] for i in do_grupo]
+        nova = sorted(atual, key=lambda k: pos[k])
+        if nova != atual:
+            slots = sorted(i["ordem"] for i in do_grupo)
+            for k, o in zip(nova, slots):
+                db.execute("UPDATE itens SET ordem=? WHERE key=?", (o, k))
+            n += 1
+    for it in itens_todos:
         k = it["key"]
         if f"valor__{k}" not in request.form:
             continue
@@ -766,6 +791,23 @@ def _salvar_edicoes_tabela(db):
                        (val, codigo, atividade, contagem, k))
             n += 1
     return n
+
+
+def renumerar_grupo(db, grp):
+    """Códigos seguem a ordem: G.1, G.2…; variantes consecutivas (G.N.a, G.N.b) mantêm as letras."""
+    linhas = db.execute("SELECT key, codigo FROM itens WHERE grupo=? ORDER BY ordem, rowid", (grp,)).fetchall()
+    blocos = []
+    for r in linhas:
+        v = regex_variante(r["codigo"], grp)
+        base = f"v:{v}" if v else f"k:{r['key']}"  # prefixos evitam colisão entre chave interna e código
+        if blocos and blocos[-1][0] == base:
+            blocos[-1][1].append(r["key"])
+        else:
+            blocos.append((base, [r["key"]]))
+    for i, (_, keys) in enumerate(blocos, 1):
+        for j, k in enumerate(keys):
+            cod = f"{grp}.{i}.{chr(97 + j)}" if len(keys) > 1 else f"{grp}.{i}"
+            db.execute("UPDATE itens SET codigo=?, numero=? WHERE key=?", (cod, i, k))
 
 
 def _adicionar_item(db, grp):
