@@ -121,3 +121,21 @@ label.inline input:not([type=checkbox]){display:inline-block;width:92px;margin:0
 .ok-line{padding:3px 0;font-size:14px}.err-line{padding:3px 0;font-size:13px;color:var(--red)}
 .foot{color:var(--muted);font-size:12px;padding:10px 20px 30px}
 .grupos-lista label.inline{align-items:flex-start;font-weight:500}.grupos-lista label.inline input{margin-top:3px}.grupos-lista b{white-space:nowrap}
+/* sub-abas dos grupos */
+.total-banner{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;background:linear-gradient(135deg,var(--or),var(--or-dd));color:#fff;border-radius:12px;padding:14px 20px;margin-bottom:14px}
+.tb-rot{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;opacity:.85}
+.tb-v{font-size:30px;font-weight:800;line-height:1.1}.tb-v span{font-size:15px;font-weight:600;opacity:.85}
+.tb-ctx{font-size:13px;background:rgba(255,255,255,.16);border-radius:8px;padding:6px 10px}
+.gtabs{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px;margin-bottom:-1px;position:relative;z-index:1}
+.gtab{display:flex;flex-direction:column;align-items:flex-start;gap:1px;text-align:left;background:#fff;border:1px solid var(--line);border-bottom:none;border-radius:10px 10px 0 0;padding:9px 11px 10px;cursor:pointer;font:inherit;color:var(--ink);border-top:3px solid var(--or);min-width:0}
+.gtab:hover{background:var(--or-ll)}
+.gt-g{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--or-dd)}
+.gt-v{font-size:20px;font-weight:800;line-height:1.15}
+.gt-n{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.gtab.active{background:var(--card);box-shadow:0 -2px 0 var(--or) inset;border-color:#f0c4a1;border-top-color:var(--or-d)}
+.gtab.active .gt-v{color:var(--or-d)}
+.gtab.excluido{border-top-color:var(--line);background:#faf7f4}.gtab.excluido .gt-v{text-decoration:line-through;color:var(--muted)}.gtab.excluido .gt-g{color:var(--muted)}
+.gtab.excluido.active{background:#fff}
+.gpanel{display:none;border-radius:0 0 12px 12px;border-color:#f0c4a1}.gpanel.active{display:block}
+.gpanel.grupo-off{opacity:1}.gpanel.grupo-off .tabela{opacity:.6}
+@media(max-width:900px){.gtabs{grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-bottom:10px}.gtab{border-radius:10px;border-bottom:1px solid var(--line)}.gpanel{border-radius:12px}}

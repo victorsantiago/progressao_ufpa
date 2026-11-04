@@ -26,7 +26,7 @@
 </div>
 
 <div class="box filtros-box">
-  {% with filtros_action=url_for('professor', pid=prof.id), filtros_hidden={'aba': aba} %}{% include "_filtros.html" %}{% endwith %}
+  {% with filtros_action=url_for('professor', pid=prof.id), filtros_hidden={'aba': aba, 'grupo': grupo_ativo} %}{% include "_filtros.html" %}{% endwith %}
 </div>
 
 <div class="tabs">
@@ -80,24 +80,27 @@
 
 <!-- ===================== ABA PONTUAÇÃO ===================== -->
 <section id="tab-pontuacao" class="tab-panel {{ 'active' if aba == 'pontuacao' }}">
-  <div class="totais">
+  <div class="total-banner">
+    <div><div class="tb-rot">Total considerado</div><div class="tb-v">{{ '%.1f'|format(pont.total) }} <span>pontos</span></div></div>
+    <div class="tb-ctx">{{ descreve_filtros(fl) }}</div>
+  </div>
+
+  <div class="gtabs" role="tablist">
     {% for g, nome in GRUPOS.items() %}
     {% set inc = g in fl.grupos %}
-    <div class="total-card {{ '' if inc else 'excluido' }}" title="{{ 'Considerado na análise' if inc else 'Fora da análise' }}">
-      <div class="tc-g">Grupo {{ g }}{% if not inc %} · fora{% endif %}</div>
-      <div class="tc-v">{{ '%.1f'|format(pont.totais_grupo[g]) }}</div>
-      <div class="tc-n">{{ nome }}</div>
-    </div>
+    <button type="button" role="tab" class="gtab {{ 'active' if g == grupo_ativo }} {{ '' if inc else 'excluido' }}" data-g="{{ g }}" title="{{ nome }}{{ '' if inc else ' — fora da análise' }}">
+      <span class="gt-g">Grupo {{ g }}</span>
+      <span class="gt-v">{{ '%.1f'|format(pont.totais_grupo[g]) }}</span>
+      <span class="gt-n">{{ 'fora da análise' if not inc else nome }}</span>
+    </button>
     {% endfor %}
-    <div class="total-card geral"><div class="tc-g">Total considerado</div><div class="tc-v">{{ '%.1f'|format(pont.total) }}</div><div class="tc-n">{{ descreve_filtros(fl) }}</div></div>
   </div>
-  <p class="muted small">Calculado a partir do XML do Lattes com os valores e o mapeamento da gestão. {% if filtro %}Só entram registros cujo período intercepta o interstício; itens contados por ano consideram apenas os anos dentro dele. {% endif %}Grupos desmarcados aparecem para referência, mas não somam no total. Itens sem correspondência no Lattes (ex.: carga horária de aulas) devem ser comprovados à parte.</p>
 
   {% for g, nome in GRUPOS.items() %}
   {% set linhas = por_grupo[g] %}
   {% set inc = g in fl.grupos %}
-  <div class="box {{ '' if inc else 'grupo-off' }}">
-    <h3>Grupo {{ g }} — {{ nome }} <span class="count">{{ '%.1f'|format(pont.totais_grupo[g]) }} pts</span>{% if not inc %} <span class="pill desconhecido">fora da análise</span>{% endif %}</h3>
+  <div class="gpanel box {{ 'active' if g == grupo_ativo }} {{ '' if inc else 'grupo-off' }}" id="gpanel-{{ g }}" role="tabpanel">
+    <h3>Grupo {{ g }} — {{ nome }} <span class="count">{{ '%.1f'|format(pont.totais_grupo[g]) }} pts</span>{% if not inc %} <span class="pill desconhecido">fora da análise — não soma no total</span>{% endif %}</h3>
     {% if not linhas %}<p class="muted">Nenhum item do Lattes neste grupo.</p>{% else %}
     <table class="tabela">
       <thead><tr><th>Item do Lattes</th><th>Item da tabela</th><th class="num">Qtd.</th><th class="num">Valor</th><th class="num">Pontos</th></tr></thead>
@@ -107,7 +110,7 @@
           <td>
             <details><summary>{{ l.label }}</summary>
               <ul class="plain small">
-                {% for r in l.registros %}<li>{{ r.desc }}{% if l.modo == 'years' %} <span class="muted">— {{ '%g'|format(r.qtd_considerada) }} ano(s){% if filtro %} no interstício{% endif %}</span>{% endif %}</li>{% endfor %}
+                {% for r in l.registros %}<li>{{ r.desc }}{% if l.modo == 'years' %} <span class="muted">— {{ '%g'|format(r.qtd_considerada) }} ano(s){% if pont.filtro %} no interstício{% endif %}</span>{% endif %}</li>{% endfor %}
                 {% for r in l.registros_fora %}<li class="fora-li">{{ r.desc }} <span class="muted">— {{ r.motivo }}</span></li>{% endfor %}
               </ul>
             </details>
@@ -124,6 +127,7 @@
     {% endif %}
   </div>
   {% endfor %}
+  <p class="muted small">Calculado a partir do XML do Lattes com os valores e o mapeamento da gestão. {% if pont.filtro %}Só entram registros cujo período intercepta o interstício; itens contados por ano consideram apenas os anos dentro dele. {% endif %}Grupos fora da análise aparecem para referência, mas não somam no total. Itens sem correspondência no Lattes (ex.: carga horária de aulas) devem ser comprovados à parte.</p>
 </section>
 {% endblock %}
 {% block scripts %}
@@ -133,6 +137,12 @@ document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () =>
   t.classList.add('active'); document.getElementById('tab-' + t.dataset.tab).classList.add('active');
   const u = new URL(location.href); u.searchParams.set('aba', t.dataset.tab); history.replaceState(null, '', u);
   const h = document.querySelector('.filtros input[name=aba]'); if (h) h.value = t.dataset.tab;
+}));
+document.querySelectorAll('.gtab').forEach(t => t.addEventListener('click', () => {
+  document.querySelectorAll('.gtab, .gpanel').forEach(e => e.classList.remove('active'));
+  t.classList.add('active'); document.getElementById('gpanel-' + t.dataset.g).classList.add('active');
+  const u = new URL(location.href); u.searchParams.set('grupo', t.dataset.g); history.replaceState(null, '', u);
+  const h = document.querySelector('.filtros input[name=grupo]'); if (h) h.value = t.dataset.g;
 }));
 // Verifica no eLattes se há versão mais nova e ajusta o botão
 (async () => {

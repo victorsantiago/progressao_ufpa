@@ -413,9 +413,14 @@ def professor(pid):
     parsed, pont, _ = _montar_pontuacao(prof, fl)
     pontos_cat = {l["categoria"]: l for l in pont["linhas"]}
     por_grupo = {g: [l for l in pont["linhas"] if l["grupo"] == g] for g in GRUPOS}
+    grupo_ativo = request.args.get("grupo")
+    if grupo_ativo not in GRUPOS:
+        # primeiro grupo considerado que tenha pontos; senão o primeiro considerado; senão I
+        grupo_ativo = next((g for g in fl["grupos"] if pont["totais_grupo"][g] > 0),
+                           fl["grupos"][0] if fl["grupos"] else "I")
     return render_template("professor.html", prof=prof, cv=parsed, pont=pont, por_grupo=por_grupo, fl=fl,
                            fl_query=filtros_query(fl), pontos_cat=pontos_cat, status=status_atualizacao(prof),
-                           aba=request.args.get("aba", "curriculo"))
+                           aba=request.args.get("aba", "curriculo"), grupo_ativo=grupo_ativo)
 
 
 @app.route("/professor/<pid>/xml")
