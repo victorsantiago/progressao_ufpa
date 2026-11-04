@@ -229,7 +229,7 @@ label.inline input[type=month],.anos input[type=month]{width:160px}
 .gt-min.ok{color:#11653a}.gt-min.falta{color:var(--pri-dd)}
 /* gráfico de evolução */
 .grafico-box{padding:16px 18px 10px}
-.grafico-cab{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+.grafico-cab{display:flex;flex-direction:column;align-items:flex-start;gap:10px;margin-bottom:8px}
 .grafico-cab h3{margin:0}
 .grafico-area{position:relative;height:320px}
 .grafico-tabela{margin-top:8px}.grafico-tabela summary{cursor:pointer;color:var(--pri-d)}
