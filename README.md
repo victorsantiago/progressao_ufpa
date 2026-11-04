@@ -25,15 +25,19 @@ Ferramenta web (Flask + SQLite) que:
 
 ## Análise por interstício e grupos
 
-- No perfil (aba **Pontuação**) e na lista da gestão há um filtro com **ano inicial/final do interstício**
-  e os **grupos (I–VIII) considerados**. Atalhos: últimos 2–3 anos e "todo o currículo".
-- Entra na análise todo registro cujo período intercepta o interstício; itens contados por ano
-  (projetos, cargos, revisão de periódico) contam só os anos dentro dele.
-- Grupos desmarcados continuam visíveis, mas não somam no total. Na aba Currículo, itens fora do
-  interstício aparecem esmaecidos.
-- O padrão (usado quando a página abre sem filtro) é definido em **Gestão → Configuração**; a exportação
-  CSV usa o filtro da tela.
-- A logo da UFPA é enviada em **Gestão → Configuração → Logo** e fica guardada no disco do servidor.
+- O interstício é sempre **mês/ano inicial a mês/ano final** (filtro no perfil e na lista da gestão;
+  padrão em Gestão → Configuração). Atalhos: últimos 2 e 3 anos (até o mês anterior) e todo o currículo.
+- Entra todo registro cujo período (em meses) intercepta o interstício. O Lattes informa mês em vínculos,
+  ensino, cargos, conselhos, estágios, participação em projetos e textos em jornal; a maior parte da
+  produção (artigos, eventos, bancas, orientações) traz só o ano — nesse caso vale de janeiro a dezembro.
+- Itens contados por ano/semestre são proporcionais aos meses dentro do interstício (18 meses = 1,5 ano).
+- **Mínimos para progressão**: em Gestão → Tabela de valores o admin define o mínimo de cada grupo e o
+  mínimo total. O perfil mostra, no destaque do total, se cada grupo considerado e o total foram atingidos
+  (e quanto falta); a lista da gestão e o CSV trazem a coluna "Mínimos".
+- **Evolução por ano**: gráfico de barras empilhadas por grupo com todo o histórico do Lattes; anos fora do
+  interstício ficam em cinza. Itens por ano/semestre se distribuem pelos meses de cada ano; os demais contam
+  no ano final do registro. Há uma tabela com os mesmos dados. (Chart.js 4.4.1 incluído em `static/vendor/`.)
+- Grupos desmarcados continuam visíveis, mas não somam no total.
 
 ## Fotos dos professores
 

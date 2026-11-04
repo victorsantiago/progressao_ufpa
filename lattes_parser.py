@@ -14,7 +14,8 @@ import xml.etree.ElementTree as ET
 from scoring import CATEGORIAS_MAP
 
 ANO_ATUAL = dt.date.today().year
-PARSER_VERSAO = 2
+PARSER_VERSAO = 3
+MES_ATUAL = dt.date.today().month
 
 _RE_PERIODO = re.compile(r"\((\d{4})(\s*[–-]\s*(\d{4}|atual)?)?\)")
 
@@ -31,6 +32,19 @@ def _extrair_periodo(texto):
     else:
         fim = ini
     return ini, max(ini, fim)
+
+
+def _mes(v):
+    try:
+        m = int(str(v).strip())
+        return m if 1 <= m <= 12 else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _meses(a):
+    """(mês inicial, mês final) de um elemento com MES-INICIO/MES-FIM; mês final só se houver ANO-FIM."""
+    return _mes(a.get("MES-INICIO")), (_mes(a.get("MES-FIM")) if a.get("ANO-FIM") else None)
 
 
 def _attrs(elem):
@@ -126,15 +140,19 @@ class Curriculo:
         self.secoes.append(s)
         return s
 
-    def _add_cat(self, cat, descricao, qtd=1.0):
+    def _add_cat(self, cat, descricao, qtd=1.0, meses=(None, None)):
         """Registra um item pontuável. O período (ano inicial/final) é lido do
-        último '(AAAA)' ou '(AAAA – AAAA|atual)' da descrição."""
+        último '(AAAA)' ou '(AAAA – AAAA|atual)' da descrição; os meses vêm do XML quando existem
+        (sem mês: considera janeiro a dezembro; período 'atual' termina no mês corrente)."""
         if cat not in CATEGORIAS_MAP:
             raise KeyError(cat)
         ini, fim = _extrair_periodo(descricao)
+        mi, mf = meses
+        if mf is None and ini is not None and "atual)" in descricao[-60:] and fim == ANO_ATUAL:
+            mf = MES_ATUAL
         c = self.categorias.setdefault(cat, {"qtd": 0.0, "registros": []})
         c["qtd"] += qtd
-        c["registros"].append({"desc": descricao, "qtd": float(qtd), "ini": ini, "fim": fim})
+        c["registros"].append({"desc": descricao, "qtd": float(qtd), "ini": ini, "fim": fim, "mi": mi, "mf": mf})
 
     def to_dict(self):
         return {"versao": PARSER_VERSAO, "dados": self.dados, "secoes": self.secoes, "categorias": self.categorias}
@@ -275,10 +293,10 @@ def _atuacao(root, cv):
             cat = None
             if "revisor" in tipo.lower() or "revisor" in enquad.lower():
                 cat = "revisor_periodico"
-                cv._add_cat(cat, f"Revisor – {inst} ({periodo})", _years(a.get("ANO-INICIO"), a.get("ANO-FIM")))
+                cv._add_cat(cat, f"Revisor – {inst} ({periodo})", _years(a.get("ANO-INICIO"), a.get("ANO-FIM")), meses=_meses(a))
             elif "editorial" in tipo.lower() or "editorial" in enquad.lower():
                 cat = "corpo_editorial"
-                cv._add_cat(cat, f"Corpo editorial – {inst} ({periodo})", _years(a.get("ANO-INICIO"), a.get("ANO-FIM")))
+                cv._add_cat(cat, f"Corpo editorial – {inst} ({periodo})", _years(a.get("ANO-INICIO"), a.get("ANO-FIM")), meses=_meses(a))
             sec["registros"].append(_reg(a, titulo=inst, ano=periodo, subtitulo=f"{tipo} – {enquad}".strip(" –"), categoria=cat, detalhes=det))
         for en in ap.iter("ENSINO"):
             a = _attrs(en)
@@ -286,31 +304,31 @@ def _atuacao(root, cv):
             tipo = a.get("TIPO-ENSINO", "").replace("-", " ").title()
             cat = "ensino_pos" if "POS" in a.get("TIPO-ENSINO", "") else "ensino_graduacao"
             periodo = f"{a.get('ANO-INICIO', '')} – {a.get('ANO-FIM', '') or 'atual'}"
-            cv._add_cat(cat, f"{tipo}: {a.get('NOME-CURSO', '')} ({periodo}) – {len(disc)} disciplina(s)", max(1, len(disc)))
+            cv._add_cat(cat, f"{tipo}: {a.get('NOME-CURSO', '')} ({periodo}) – {len(disc)} disciplina(s)", max(1, len(disc)), meses=_meses(a))
             sec["registros"].append(_reg(a, titulo=f"Ensino ({tipo}) – {a.get('NOME-CURSO', '')}", ano=periodo, subtitulo=inst,
                                          categoria=cat, detalhes={"Disciplinas": "; ".join(disc)}))
         for d in ap.iter("DIRECAO-E-ADMINISTRACAO"):
             a = _attrs(d)
             periodo = f"{a.get('ANO-INICIO', '')} – {a.get('ANO-FIM', '') or 'atual'}"
             cargo = a.get("CARGO-OU-FUNCAO", "")
-            cv._add_cat("cargo_direcao", f"{cargo} – {inst} ({periodo})", _years(a.get("ANO-INICIO"), a.get("ANO-FIM")))
+            cv._add_cat("cargo_direcao", f"{cargo} – {inst} ({periodo})", _years(a.get("ANO-INICIO"), a.get("ANO-FIM")), meses=_meses(a))
             sec["registros"].append(_reg(a, titulo=cargo, ano=periodo, subtitulo=f"{inst} – {a.get('NOME-ORGAO', '')}", categoria="cargo_direcao"))
         for c in ap.iter("CONSELHO-COMISSAO-E-CONSULTORIA"):
             a = _attrs(c)
             periodo = f"{a.get('ANO-INICIO', '')} – {a.get('ANO-FIM', '') or 'atual'}"
             esp = a.get("ESPECIFICACAO", "")
-            cv._add_cat("conselho_comissao", f"{esp} – {inst} ({periodo})", _years(a.get("ANO-INICIO"), a.get("ANO-FIM")))
+            cv._add_cat("conselho_comissao", f"{esp} – {inst} ({periodo})", _years(a.get("ANO-INICIO"), a.get("ANO-FIM")), meses=_meses(a))
             sec["registros"].append(_reg(a, titulo=esp, ano=periodo, subtitulo=inst, categoria="conselho_comissao"))
         for e in ap.iter("ESTAGIO"):
             a = _attrs(e)
             periodo = f"{a.get('ANO-INICIO', '')} – {a.get('ANO-FIM', '') or 'atual'}"
-            cv._add_cat("estagio_realizado", f"{a.get('ESTAGIO-REALIZADO', '')} – {inst} ({periodo})")
+            cv._add_cat("estagio_realizado", f"{a.get('ESTAGIO-REALIZADO', '')} – {inst} ({periodo})", meses=_meses(a))
             sec["registros"].append(_reg(a, titulo=f"Estágio: {a.get('ESTAGIO-REALIZADO', '')}", ano=periodo, subtitulo=inst, categoria="estagio_realizado"))
         for t in ap.iter("TREINAMENTO-MINISTRADO"):
             a = _attrs(t)
             periodo = f"{a.get('ANO-INICIO', '')} – {a.get('ANO-FIM', '') or 'atual'}"
             tr = [x.text for x in t.findall("TREINAMENTO") if x.text]
-            cv._add_cat("treinamento_ministrado", f"{'; '.join(tr)} – {inst} ({periodo})", max(1, len(tr)))
+            cv._add_cat("treinamento_ministrado", f"{'; '.join(tr)} – {inst} ({periodo})", max(1, len(tr)), meses=_meses(a))
             sec["registros"].append(_reg(a, titulo=f"Treinamento ministrado: {'; '.join(tr)}", ano=periodo, subtitulo=inst, categoria="treinamento_ministrado"))
 
 
@@ -319,8 +337,15 @@ def _projetos(root, cv):
     meu_id = cv.dados.get("id")
     meu_nome = (cv.dados.get("nome") or "").lower()
     vistos = set()
+    pais = {}
+    for part in root.iter("PARTICIPACAO-EM-PROJETO"):
+        for pp in part.iter("PROJETO-DE-PESQUISA"):
+            pais[id(pp)] = _attrs(part)
     for p in root.iter("PROJETO-DE-PESQUISA"):
         a = _attrs(p)
+        pai = pais.get(id(p), {})
+        mi = _mes(pai.get("MES-INICIO")) if pai.get("ANO-INICIO") == a.get("ANO-INICIO") else None
+        mf = _mes(pai.get("MES-FIM")) if a.get("ANO-FIM") and pai.get("ANO-FIM") == a.get("ANO-FIM") else None
         chave = (a.get("NOME-DO-PROJETO"), a.get("ANO-INICIO"))
         if chave in vistos:
             continue
@@ -355,7 +380,7 @@ def _projetos(root, cv):
         else:
             cat, qtd = "proj_outro", 1
         desc = f"{a.get('NOME-DO-PROJETO', '')} ({periodo}) – {papel}"
-        cv._add_cat(cat, desc, qtd)
+        cv._add_cat(cat, desc, qtd, meses=(mi, mf))
         det = {"Natureza": natureza.title(), "Situação": a.get("SITUACAO", "").replace("_", " ").title(), "Papel": papel,
                "Financiadores": "; ".join(financiadores), "Integrantes": "; ".join(integrantes),
                "Descrição": a.get("DESCRICAO-DO-PROJETO", "")}
@@ -425,7 +450,9 @@ def _producao_bibliografica(root, cv):
     for el in pb.iter("TEXTO-EM-JORNAL-OU-REVISTA"):
         a = _merge(el)
         jr = a.get("TITULO-DO-JORNAL-OU-REVISTA", "")
-        cv._add_cat("texto_jornal", f"{_titulo(a)} – {jr} ({_ano(a)})")
+        d = a.get("DATA-DE-PUBLICACAO", "")
+        mpub = _mes(d[2:4]) if len(d) == 8 and d.isdigit() else None
+        cv._add_cat("texto_jornal", f"{_titulo(a)} – {jr} ({_ano(a)})", meses=(mpub, mpub))
         sec_jor["registros"].append(_reg(a, subtitulo=jr, categoria="texto_jornal", autores=_autores(el),
                                          detalhes={"Natureza": a.get("NATUREZA", "").replace("_", " ").title(), "Data": a.get("DATA-DE-PUBLICACAO", "")}))
     demais = pb.find("DEMAIS-TIPOS-DE-PRODUCAO-BIBLIOGRAFICA")

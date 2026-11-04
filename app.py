@@ -23,7 +23,7 @@ import fotos
 from genero import inferir_genero
 from elattes_client import ELattesClient, ELattesError, extrair_xmls
 from lattes_parser import PARSER_VERSAO, parse_lattes_xml
-from scoring import CATEGORIAS, CATEGORIAS_MAP, CONTAGENS, calcular_pontuacao, tabela_itens
+from scoring import CATEGORIAS, CATEGORIAS_MAP, CONTAGENS, calcular_pontuacao, serie_anual, tabela_itens
 from scoring import GRUPOS as GRUPOS_ANEXO
 
 APP_NOME = "Progressão Automatizada UFPA"
@@ -92,6 +92,9 @@ def init_db():
     """)
     for i, (cod, nome) in enumerate(GRUPOS_ANEXO.items(), 1):
         con.execute("INSERT OR IGNORE INTO grupos (codigo, nome, ordem, original) VALUES (?,?,?,1)", (cod, nome, i))
+    gcols = {r["name"] for r in con.execute("PRAGMA table_info(grupos)")}
+    if "minimo" not in gcols:
+        con.execute("ALTER TABLE grupos ADD COLUMN minimo REAL")
     icols = {r["name"] for r in con.execute("PRAGMA table_info(itens)")}
     for col in ("codigo", "contagem"):
         if col not in icols:
@@ -207,6 +210,42 @@ app.jinja_env.globals["APP_SUB"] = APP_SUB
 def carregar_grupos(con=None):
     c = con or get_db()
     return {r["codigo"]: r["nome"] for r in c.execute("SELECT codigo, nome FROM grupos ORDER BY ordem, rowid")}
+
+
+def _num(v):
+    try:
+        x = float(str(v).replace(",", ".").strip())
+        return x if x >= 0 else None
+    except (TypeError, ValueError):
+        return None
+
+
+def minimos(con=None):
+    """({grupo: mínimo ou None}, mínimo total ou None) definidos na Tabela de valores."""
+    c = con or get_db()
+    por_grupo = {r["codigo"]: r["minimo"] for r in c.execute("SELECT codigo, minimo FROM grupos")}
+    return por_grupo, _num(cfg("minimo_total", "", c))
+
+
+def situacao(pont, fl, con=None):
+    """Compara a pontuação com os mínimos: por grupo considerado e total."""
+    por_grupo, total_min = minimos(con)
+    grupos = []
+    for g_ in fl["grupos"]:
+        mn = por_grupo.get(g_)
+        if mn is None:
+            continue
+        pts = pont["totais_grupo"].get(g_, 0.0)
+        grupos.append({"grupo": g_, "minimo": mn, "pontos": pts, "ok": pts >= mn, "falta": max(0.0, mn - pts)})
+    total = None
+    if total_min is not None:
+        total = {"minimo": total_min, "pontos": pont["total"], "ok": pont["total"] >= total_min,
+                 "falta": max(0.0, total_min - pont["total"]),
+                 "pct": min(100.0, 100.0 * pont["total"] / total_min) if total_min else 100.0}
+    definido = total is not None or bool(grupos)
+    apto = definido and (total is None or total["ok"]) and all(x["ok"] for x in grupos)
+    return {"grupos": grupos, "por_grupo": {x["grupo"]: x for x in grupos}, "total": total,
+            "definido": definido, "apto": apto}
 
 
 def G():
@@ -339,20 +378,45 @@ def _ano(v):
         return None
 
 
+def _mes_ano(v, fim=False):
+    """'AAAA-MM' (ou 'MM/AAAA', ou só 'AAAA') → (ano, mês). Só o ano: janeiro no início, dezembro no fim."""
+    v = (v or "").strip()
+    m = re.fullmatch(r"(\d{4})-(\d{1,2})", v) or None
+    if m:
+        a, ms = int(m.group(1)), int(m.group(2))
+    else:
+        m = re.fullmatch(r"(\d{1,2})/(\d{4})", v)
+        if m:
+            a, ms = int(m.group(2)), int(m.group(1))
+        else:
+            a = _ano(v)
+            if a is None:
+                return None
+            ms = 12 if fim else 1
+    if not (1900 <= a <= 2100 and 1 <= ms <= 12):
+        return None
+    return a, ms
+
+
+def _monta_filtros(ini, fim, grupos):
+    if ini and fim and ini > fim:
+        ini, fim = fim, ini
+    return {"ini": f"{ini[0]:04d}-{ini[1]:02d}" if ini else None, "fim": f"{fim[0]:04d}-{fim[1]:02d}" if fim else None,
+            "ai": ini[0] if ini else None, "mi": ini[1] if ini else None,
+            "af": fim[0] if fim else None, "mf": fim[1] if fim else None, "grupos": grupos}
+
+
 def filtros_padrao(con=None):
     gs = [g for g in (cfg("grupos", ",".join(G()), con) or "").split(",") if g in G()]
-    return {"ini": _ano(cfg("interst_ini", "", con)), "fim": _ano(cfg("interst_fim", "", con)), "grupos": gs}
+    return _monta_filtros(_mes_ano(cfg("interst_ini", "", con)), _mes_ano(cfg("interst_fim", "", con), fim=True), gs)
 
 
 def ler_filtros():
-    """Lê ?ini=&fim=&g=...&f=1 da URL; sem f=1 usa os padrões definidos na Configuração."""
+    """Lê ?ini=AAAA-MM&fim=AAAA-MM&g=...&f=1 da URL; sem f=1 usa os padrões definidos na Configuração."""
     if request.args.get("f") != "1":
         return filtros_padrao()
-    ini, fim = _ano(request.args.get("ini")), _ano(request.args.get("fim"))
-    if ini and fim and ini > fim:
-        ini, fim = fim, ini
     grupos = [g for g in request.args.getlist("g") if g in G()]
-    return {"ini": ini, "fim": fim, "grupos": grupos}
+    return _monta_filtros(_mes_ano(request.args.get("ini")), _mes_ano(request.args.get("fim"), fim=True), grupos)
 
 
 def filtros_query(fl):
@@ -361,24 +425,44 @@ def filtros_query(fl):
     return "&".join(parts)
 
 
-def descreve_filtros(fl):
+def _mm_aaaa(v):
+    return f"{v[5:7]}/{v[:4]}" if v else ""
+
+
+def descreve_periodo(fl):
     if fl["ini"] and fl["fim"]:
-        periodo = f"{fl['ini']}–{fl['fim']}"
-    elif fl["ini"]:
-        periodo = f"a partir de {fl['ini']}"
-    elif fl["fim"]:
-        periodo = f"até {fl['fim']}"
-    else:
-        periodo = "todo o currículo"
+        return f"{_mm_aaaa(fl['ini'])} a {_mm_aaaa(fl['fim'])}"
+    if fl["ini"]:
+        return f"a partir de {_mm_aaaa(fl['ini'])}"
+    if fl["fim"]:
+        return f"até {_mm_aaaa(fl['fim'])}"
+    return "todo o currículo"
+
+
+def descreve_filtros(fl):
     if len(fl["grupos"]) == len(G()):
         gtxt = "todos os grupos"
     elif not fl["grupos"]:
         gtxt = "nenhum grupo"
     else:
         gtxt = "grupos " + ", ".join(fl["grupos"])
-    return f"Interstício: {periodo} · {gtxt}"
+    return f"Interstício: {descreve_periodo(fl)} · {gtxt}"
 
 
+def presets_intersticio():
+    """Atalhos: últimos 24 e 36 meses completos (terminando no mês anterior) e todo o currículo."""
+    hoje = dt.date.today()
+    fim_a, fim_m = (hoje.year, hoje.month - 1) if hoje.month > 1 else (hoje.year - 1, 12)
+    out = []
+    for meses in (24, 36):
+        idx = fim_a * 12 + fim_m - 1 - (meses - 1)
+        ini_a, ini_m = idx // 12, idx % 12 + 1
+        out.append((f"Últimos {meses // 12} anos", f"{ini_a:04d}-{ini_m:02d}", f"{fim_a:04d}-{fim_m:02d}"))
+    return out
+
+
+app.jinja_env.globals["descreve_periodo"] = descreve_periodo
+app.jinja_env.globals["presets_intersticio"] = presets_intersticio
 app.jinja_env.globals["descreve_filtros"] = descreve_filtros
 
 
@@ -528,9 +612,10 @@ def _montar_pontuacao(prof_row, filtros=None, itens=None, mapeamento=None):
     itens = itens if itens is not None else carregar_itens()
     itens_por_key = {i["key"]: i for i in itens}
     mapeamento = mapeamento if mapeamento is not None else carregar_mapeamento()
-    fl = filtros or {"ini": None, "fim": None, "grupos": list(G())}
+    fl = filtros or _monta_filtros(None, None, list(G()))
     pont = calcular_pontuacao(parsed["categorias"], itens_por_key, mapeamento,
-                              ano_ini=fl["ini"], ano_fim=fl["fim"], grupos=fl["grupos"], todos_grupos=list(G()))
+                              ano_ini=fl["ai"], mes_ini=fl["mi"], ano_fim=fl["af"], mes_fim=fl["mf"],
+                              grupos=fl["grupos"], todos_grupos=list(G()))
     return parsed, pont, itens
 
 
@@ -541,7 +626,9 @@ def professor(pid):
     if not prof:
         abort(404)
     fl = ler_filtros()
-    parsed, pont, _ = _montar_pontuacao(prof, fl)
+    parsed, pont, itens = _montar_pontuacao(prof, fl)
+    sit = situacao(pont, fl)
+    grafico = dados_grafico(parsed, itens, fl)
     pontos_cat = {l["categoria"]: l for l in pont["linhas"]}
     por_grupo = {g: [l for l in pont["linhas"] if l["grupo"] == g] for g in G()}
     grupo_ativo = request.args.get("grupo")
@@ -551,7 +638,37 @@ def professor(pid):
                            fl["grupos"][0] if fl["grupos"] else "I")
     return render_template("professor.html", prof=prof, cv=parsed, pont=pont, por_grupo=por_grupo, fl=fl,
                            fl_query=filtros_query(fl), pontos_cat=pontos_cat, status=status_atualizacao(prof),
-                           aba=request.args.get("aba", "curriculo"), grupo_ativo=grupo_ativo)
+                           aba=request.args.get("aba", "curriculo"), grupo_ativo=grupo_ativo, sit=sit, grafico=grafico)
+
+
+# Paleta categórica de referência (ordem fixa; nunca reciclada). Grupos além do 8º viram "Outros grupos".
+CORES_GRUPOS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"]
+COR_OUTROS = "#5b6168"
+
+
+def dados_grafico(parsed, itens, fl):
+    """Série anual de pontos por grupo considerado, com os anos dentro/fora do interstício."""
+    grupos = G()
+    serie = serie_anual(parsed["categorias"], {i["key"]: i for i in itens}, carregar_mapeamento(), list(grupos))
+    lo = fl["ai"] * 12 + fl["mi"] - 1 if fl["ai"] else None
+    hi = fl["af"] * 12 + fl["mf"] - 1 if fl["af"] else None
+    dentro = [(lo is None or a * 12 + 11 >= lo) and (hi is None or a * 12 <= hi) for a in serie["anos"]]
+    ordem = list(grupos)
+    datasets, outros = [], None
+    for g_ in fl["grupos"]:
+        i = ordem.index(g_)
+        valores = serie["series"].get(g_, [0.0] * len(serie["anos"]))
+        if i < len(CORES_GRUPOS):
+            datasets.append({"grupo": g_, "nome": grupos[g_], "cor": CORES_GRUPOS[i], "valores": valores})
+        else:
+            if outros is None:
+                outros = {"grupo": "outros", "nome": "Outros grupos", "cor": COR_OUTROS, "valores": [0.0] * len(valores)}
+            outros["valores"] = [round(a + b, 2) for a, b in zip(outros["valores"], valores)]
+    if outros:
+        datasets.append(outros)
+    totais = [round(sum(d["valores"][i] for d in datasets), 2) for i in range(len(serie["anos"]))]
+    return {"anos": serie["anos"], "dentro": dentro, "datasets": datasets, "totais": totais,
+            "tem_dados": any(any(d["valores"]) for d in datasets)}
 
 
 @app.route("/professor/<pid>/xml")
@@ -622,7 +739,7 @@ def admin_professores():
     profs = []
     for p in db.execute("SELECT * FROM professores ORDER BY nome").fetchall():
         _, pont, _ = _montar_pontuacao(p, fl, itens, mapa)
-        profs.append({**dict(p), "total": pont["total"], "totais_grupo": pont["totais_grupo"]})
+        profs.append({**dict(p), "total": pont["total"], "totais_grupo": pont["totais_grupo"], "sit": situacao(pont, fl, db)})
     ordem = request.args.get("ordem", "nome")
     if ordem == "pontos":
         profs.sort(key=lambda x: -x["total"])
@@ -807,7 +924,9 @@ def admin_tabela():
         if k:
             cats_por_item.setdefault(k, []).append(CATEGORIAS_MAP[c]["label"])
     grupo_ativo = request.args.get("grupo") if request.args.get("grupo") in grupos else next(iter(grupos), "")
+    min_grupo, min_total = minimos(db)
     return render_template("admin_tabela.html", por_grupo=por_grupo, cats_por_item=cats_por_item, GRUPOS=grupos,
+                           min_grupo=min_grupo, min_total=min_total,
                            originais=originais, CONTAGENS=CONTAGENS, grupo_ativo=grupo_ativo)
 
 
@@ -818,6 +937,18 @@ def _salvar_edicoes_tabela(db):
         novo = (request.form.get(f"grupo_nome__{cod}") or "").strip()
         if novo and novo != nome:
             db.execute("UPDATE grupos SET nome=? WHERE codigo=?", (novo, cod))
+            n += 1
+        if f"grupo_minimo__{cod}" in request.form:
+            mn = _num(request.form.get(f"grupo_minimo__{cod}"))
+            atual = db.execute("SELECT minimo FROM grupos WHERE codigo=?", (cod,)).fetchone()["minimo"]
+            if mn != atual:
+                db.execute("UPDATE grupos SET minimo=? WHERE codigo=?", (mn, cod))
+                n += 1
+    if "minimo_total" in request.form:
+        mt = _num(request.form.get("minimo_total"))
+        if mt != _num(cfg("minimo_total", "", db)):
+            db.execute("INSERT INTO config (chave, valor) VALUES ('minimo_total', ?) "
+                       "ON CONFLICT(chave) DO UPDATE SET valor=excluded.valor", ("" if mt is None else f"{mt:g}",))
             n += 1
     # nova ordem dentro de cada grupo (reaproveita os números de ordem do próprio grupo)
     itens_todos = carregar_itens(db)
@@ -930,11 +1061,10 @@ def admin_config():
     if request.method == "POST":
         acao = request.form.get("acao")
         if acao == "analise":
-            ini, fim = _ano(request.form.get("interst_ini")), _ano(request.form.get("interst_fim"))
-            if ini and fim and ini > fim:
-                ini, fim = fim, ini
-            salvar("interst_ini", str(ini or ""))
-            salvar("interst_fim", str(fim or ""))
+            fl_novo = _monta_filtros(_mes_ano(request.form.get("interst_ini")),
+                                     _mes_ano(request.form.get("interst_fim"), fim=True), [])
+            salvar("interst_ini", fl_novo["ini"] or "")
+            salvar("interst_fim", fl_novo["fim"] or "")
             salvar("grupos", ",".join(g for g in request.form.getlist("g") if g in G()))
             flash("Análise padrão salva.", "ok")
         elif acao == "logo":
@@ -1058,12 +1188,13 @@ def admin_exportar():
     w = csv.writer(out, delimiter=";")
     w.writerow([descreve_filtros(fl)])
     w.writerow(["id_lattes", "nome", "atualizacao_lattes", "importado_em", "status"]
-               + [f"Grupo {g}{'' if g in fl['grupos'] else ' (fora da análise)'}" for g in G()] + ["Total considerado"])
+               + [f"Grupo {g}{'' if g in fl['grupos'] else ' (fora da análise)'}" for g in G()] + ["Total considerado", "Mínimos"])
     for p in profs:
         _, pont, _ = _montar_pontuacao(p, fl, itens, mapa)
         w.writerow([p["id"], p["nome"], p["data_atualizacao_br"], fmt_dt(p["importado_em"]), status_atualizacao(p)]
-                   + [f"{pont['totais_grupo'][g]:.1f}".replace(".", ",") for g in G()] + [f"{pont['total']:.1f}".replace(".", ",")])
-    sufixo = f"_{fl['ini'] or 'inicio'}-{fl['fim'] or 'atual'}" if (fl["ini"] or fl["fim"]) else ""
+                   + [f"{pont['totais_grupo'][g]:.1f}".replace(".", ",") for g in G()] + [f"{pont['total']:.1f}".replace(".", ","),
+                      (lambda st: ("atingiu" if st["apto"] else "não atingiu") if st["definido"] else "")(situacao(pont, fl, db))])
+    sufixo = f"_{fl['ini'] or 'inicio'}_a_{fl['fim'] or 'atual'}" if (fl["ini"] or fl["fim"]) else ""
     return app.response_class(out.getvalue().encode("utf-8-sig"), mimetype="text/csv",
                               headers={"Content-Disposition": f"attachment; filename=pontuacao_professores{sufixo}.csv"})
 

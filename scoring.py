@@ -354,18 +354,42 @@ def _registro(rec):
     return {"desc": str(rec), "qtd": 1.0, "ini": None, "fim": None}  # formato antigo
 
 
-def calcular_pontuacao(categorias_qtd, itens_por_key, mapeamento, ano_ini=None, ano_fim=None, grupos=None, todos_grupos=None):
+def _idx(ano, mes):
+    """Índice mensal contínuo (ano*12 + mês-1)."""
+    return ano * 12 + (mes - 1)
+
+
+def _faixa(rec):
+    """Faixa mensal [início, fim] de um registro; sem mês = janeiro a dezembro."""
+    ini, fim = rec.get("ini"), rec.get("fim")
+    if ini is None:
+        return None
+    return _idx(ini, rec.get("mi") or 1), _idx(fim if fim is not None else ini, rec.get("mf") or 12)
+
+
+def _q_registro(rec, contagem, modo, meses):
+    if contagem == "ano":
+        return round(meses / 12, 2)
+    if contagem == "semestre":
+        return round(meses / 6, 2)
+    # por registro: a quantidade natural do registro (ex.: disciplinas, blocos de 3 h)
+    return 1.0 if modo == "years" else float(rec.get("qtd") or 0)
+
+
+def calcular_pontuacao(categorias_qtd, itens_por_key, mapeamento, ano_ini=None, ano_fim=None, grupos=None,
+                       todos_grupos=None, mes_ini=None, mes_fim=None):
     """
-    categorias_qtd: {categoria_key: {"qtd": float, "registros": [{"desc","qtd","ini","fim"}]}}
-    itens_por_key: {item_key: {"valor": float, "atividade": str, "grupo": str, ...}}
+    categorias_qtd: {categoria_key: {"qtd": float, "registros": [{"desc","qtd","ini","fim","mi","mf"}]}}
+    itens_por_key: {item_key: {"valor": float, "atividade": str, "grupo": str, "contagem": str, ...}}
     mapeamento: {categoria_key: item_key or None}
-    ano_ini/ano_fim: interstício avaliado (None = todo o período). Um registro entra se o seu
-        período intercepta o interstício; itens "por ano" contam só os anos dentro dele.
+    Interstício: mês/ano inicial e final (None = todo o período). Um registro entra se o seu período
+        (em meses) intercepta o interstício; itens contados por ano/semestre consideram só os meses
+        dentro dele (proporcional: 18 meses = 1,5 ano = 3 semestres).
     grupos: grupos considerados na análise (None = todos).
     """
     filtro = ano_ini is not None or ano_fim is not None
-    lo = ano_ini if ano_ini is not None else -10**9
-    hi = ano_fim if ano_fim is not None else 10**9
+    lo = _idx(ano_ini, mes_ini or 1) if ano_ini is not None else -10**9
+    hi = _idx(ano_fim, mes_fim or 12) if ano_fim is not None else 10**9
     ordem = list(todos_grupos) if todos_grupos is not None else list(GRUPOS)
     grupos = set(grupos) if grupos is not None else set(ordem)
 
@@ -382,33 +406,27 @@ def calcular_pontuacao(categorias_qtd, itens_por_key, mapeamento, ano_ini=None, 
         item = itens_por_key.get(item_key) if item_key else None
         contagem = (item.get("contagem") or "registro") if item else "registro"
         for rec in map(_registro, info["registros"]):
-            ini, fim = rec.get("ini"), rec.get("fim")
-            if filtro and ini is None:
+            faixa = _faixa(rec)
+            if filtro and faixa is None:
                 fora.append(dict(rec, motivo="sem ano informado"))
                 continue
-            if filtro and max(ini, lo) > min(fim, hi):
-                fora.append(dict(rec, motivo="fora do interstício"))
-                continue
-            if ini is None:
-                anos = 1
-            elif filtro:
-                anos = min(fim, hi) - max(ini, lo) + 1
+            if faixa is None:
+                meses = 12
             else:
-                anos = fim - ini + 1
-            if contagem == "ano":
-                q = float(anos)
-            elif contagem == "semestre":
-                q = float(2 * anos)
-            else:  # por registro: a quantidade natural do registro (ex.: disciplinas, blocos de 3 h)
-                q = 1.0 if modo == "years" else float(rec.get("qtd") or 0)
+                a, b = (max(faixa[0], lo), min(faixa[1], hi)) if filtro else faixa
+                meses = b - a + 1
+                if meses <= 0:
+                    fora.append(dict(rec, motivo="fora do interstício"))
+                    continue
+            q = _q_registro(rec, contagem, modo, meses)
             qtd += q
-            dentro.append(dict(rec, qtd_considerada=q))
+            dentro.append(dict(rec, qtd_considerada=q, meses=meses))
         if not dentro and not fora:
             continue
         valor = float(item["valor"]) if item else 0.0
         grupo = item["grupo"] if item else CATEGORIAS_MAP[ckey]["grupo"]
         incluido = grupo in grupos
-        pontos = qtd * valor if item else 0.0
+        pontos = round(qtd * valor, 2) if item else 0.0
         if item:
             totais_grupo[grupo] = totais_grupo.get(grupo, 0.0) + pontos
             if incluido:
@@ -417,7 +435,7 @@ def calcular_pontuacao(categorias_qtd, itens_por_key, mapeamento, ano_ini=None, 
             "categoria": ckey,
             "label": CATEGORIAS_MAP[ckey]["label"],
             "modo": modo,
-            "qtd": qtd,
+            "qtd": round(qtd, 2),
             "item_key": item_key,
             "item_codigo": (item.get("codigo") or item_key) if item else None,
             "contagem": contagem,
@@ -429,8 +447,44 @@ def calcular_pontuacao(categorias_qtd, itens_por_key, mapeamento, ano_ini=None, 
             "registros": dentro,
             "registros_fora": fora,
         })
-    return {"linhas": linhas, "totais_grupo": totais_grupo, "total": total,
-            "grupos": [g for g in ordem if g in grupos], "ano_ini": ano_ini, "ano_fim": ano_fim, "filtro": filtro}
+    return {"linhas": linhas, "totais_grupo": totais_grupo, "total": round(total, 2),
+            "grupos": [g for g in ordem if g in grupos], "ano_ini": ano_ini, "ano_fim": ano_fim,
+            "mes_ini": mes_ini, "mes_fim": mes_fim, "filtro": filtro}
+
+
+def serie_anual(categorias_qtd, itens_por_key, mapeamento, todos_grupos):
+    """Pontos por grupo e por ano em todo o histórico (para o gráfico de evolução).
+    Itens por ano/semestre se distribuem pelos meses de cada ano; itens por registro contam
+    no ano final do registro (ano de publicação/conclusão)."""
+    por_ano = {}
+    for cat in CATEGORIAS:
+        ckey = cat[0]
+        item_key = mapeamento.get(ckey, CATEGORIAS_MAP[ckey]["item_padrao"])
+        item = itens_por_key.get(item_key) if item_key else None
+        if not item:
+            continue
+        contagem = item.get("contagem") or "registro"
+        valor, grupo, modo = float(item["valor"]), item["grupo"], CATEGORIAS_MAP[ckey]["modo"]
+        for rec in map(_registro, (categorias_qtd.get(ckey) or {"registros": []})["registros"]):
+            faixa = _faixa(rec)
+            if faixa is None:
+                continue
+            if contagem in ("ano", "semestre"):
+                for ano in range(faixa[0] // 12, faixa[1] // 12 + 1):
+                    m = min(faixa[1], _idx(ano, 12)) - max(faixa[0], _idx(ano, 1)) + 1
+                    if m > 0:
+                        pts = valor * _q_registro(rec, contagem, modo, m)
+                        por_ano.setdefault(ano, {}).setdefault(grupo, 0.0)
+                        por_ano[ano][grupo] += pts
+            else:
+                ano = faixa[1] // 12
+                por_ano.setdefault(ano, {}).setdefault(grupo, 0.0)
+                por_ano[ano][grupo] += valor * _q_registro(rec, contagem, modo, 12)
+    if not por_ano:
+        return {"anos": [], "series": {}}
+    anos = list(range(min(por_ano), max(por_ano) + 1))
+    series = {g: [round(por_ano.get(a, {}).get(g, 0.0), 2) for a in anos] for g in todos_grupos}
+    return {"anos": anos, "series": series}
 
 
 # ---------------------------------------------------------------------------

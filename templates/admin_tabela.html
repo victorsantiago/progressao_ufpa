@@ -5,6 +5,8 @@
   <input type="hidden" name="grupo" id="grupo-atual" value="{{ grupo_ativo }}">
   <div class="tabela-topo sticky-save">
     <div class="actions"><button class="btn primary" type="submit" name="acao" value="salvar">Salvar valores</button>
+      <label class="min-total" title="Soma mínima dos grupos considerados, no interstício, para a progressão. Em branco = sem mínimo.">Mínimo total para progressão
+        <input type="number" step="0.5" min="0" name="minimo_total" value="{{ '%g'|format(min_total) if min_total is not none else '' }}" placeholder="sem mínimo"></label>
       <span id="aviso-ordem" class="small aviso-ordem" hidden>Ordem alterada — clique em Salvar valores para gravar.</span></div>
     <div class="actions">
       <input type="search" id="busca" placeholder="Filtrar itens em todos os grupos…" class="busca">
@@ -18,6 +20,7 @@
     <button type="button" role="tab" class="gtab {{ 'active' if g == grupo_ativo }}" data-g="{{ g }}">
       <span class="gt-g">Grupo {{ g }} · {{ por_grupo[g]|length }} {{ 'item' if por_grupo[g]|length == 1 else 'itens' }}</span>
       <span class="gt-nome" id="tabnome-{{ g }}">{{ nome }}</span>
+      {% if min_grupo.get(g) is not none %}<span class="gt-min">mínimo {{ '%g'|format(min_grupo.get(g)) }} pts</span>{% endif %}
     </button>
     {% endfor %}
     <button type="button" role="tab" class="gtab gtab-novo {{ 'active' if not grupo_ativo }}" data-g="__novo">
@@ -31,6 +34,9 @@
     <div class="grupo-cab">
       <label class="grupo-nome">Grupo {{ g }} — nome
         <input name="grupo_nome__{{ g }}" value="{{ nome }}" data-g="{{ g }}" required maxlength="200">
+      </label>
+      <label class="grupo-min" title="Pontuação mínima neste grupo, dentro do interstício, para a progressão. Em branco = sem mínimo.">Mínimo do grupo
+        <input type="number" step="0.5" min="0" name="grupo_minimo__{{ g }}" value="{{ '%g'|format(min_grupo.get(g)) if min_grupo.get(g) is not none else '' }}" placeholder="sem mínimo">
       </label>
       {% if g not in originais %}
       <button class="btn tiny danger" type="submit" name="acao" value="del_grupo:{{ g }}" formnovalidate
@@ -123,7 +129,7 @@ document.querySelectorAll('input[name^=grupo_nome__]').forEach(i => i.addEventLi
 document.querySelector('input[name=novo_grupo_nome]').addEventListener('keydown', e => {
   if (e.key === 'Enter') { e.preventDefault(); document.querySelector('button[value=add_grupo]').click(); }
 });
-document.querySelectorAll('.tabela-edit input, .tabela-edit textarea, .tabela-edit select, .grupo-nome input').forEach(el => {
+document.querySelectorAll('.tabela-edit input, .tabela-edit textarea, .tabela-edit select, .grupo-nome input, .grupo-min input, .min-total input').forEach(el => {
   const ini = el.value; const f = () => el.classList.toggle('changed', el.value !== ini);
   el.addEventListener('input', f); el.addEventListener('change', f);
 });

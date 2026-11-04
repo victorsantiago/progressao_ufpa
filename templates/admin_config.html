@@ -5,12 +5,12 @@
 <div class="grid2">
   <div class="box">
     <h3>Análise padrão</h3>
-    <p class="muted small">Interstício e grupos usados quando um perfil ou a lista de professores é aberta sem filtro. Cada página pode mudar a análise na hora, sem alterar este padrão. Deixe os anos em branco para considerar todo o currículo.</p>
+    <p class="muted small">Interstício e grupos usados quando um perfil ou a lista de professores é aberta sem filtro. Cada página pode mudar a análise na hora, sem alterar este padrão. Informe mês e ano inicial e final; deixe em branco para considerar todo o currículo.</p>
     <form method="post">
       <input type="hidden" name="acao" value="analise">
       <div class="anos" style="margin-bottom:12px">
-        <label class="inline">Interstício de <input type="number" name="interst_ini" min="1950" max="2100" value="{{ fl.ini or '' }}"></label>
-        <label class="inline">a <input type="number" name="interst_fim" min="1950" max="2100" value="{{ fl.fim or '' }}"></label>
+        <label class="inline">Interstício de <input type="month" name="interst_ini" value="{{ fl.ini or '' }}"></label>
+        <label class="inline">a <input type="month" name="interst_fim" value="{{ fl.fim or '' }}"></label>
       </div>
       <span class="filtro-rot">Grupos considerados</span>
       <ul class="plain grupos-lista">

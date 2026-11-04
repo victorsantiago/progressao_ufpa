@@ -34,7 +34,7 @@
 
 <!-- ===================== ABA CURRÍCULO ===================== -->
 <section id="tab-curriculo" class="tab-panel {{ 'active' if aba == 'curriculo' }}">
-  {% if filtro %}<p class="aviso small">Itens fora do interstício {{ fl.ini or '…' }}–{{ fl.fim or '…' }} aparecem esmaecidos.</p>{% endif %}
+  {% if filtro %}<p class="aviso small">Itens fora do interstício ({{ descreve_periodo(fl) }}) aparecem esmaecidos.</p>{% endif %}
   {% if cv.dados.resumo %}<div class="box"><h3>Resumo</h3><p class="resumo">{{ cv.dados.resumo }}</p></div>{% endif %}
   {% if cv.dados.areas %}<div class="box"><h3>Áreas de atuação</h3><ul class="plain">{% for a in cv.dados.areas %}<li>{{ a }}</li>{% endfor %}</ul></div>{% endif %}
   {% if cv.dados.idiomas %}<div class="box"><h3>Idiomas</h3><ul class="plain">{% for i in cv.dados.idiomas %}<li><b>{{ i.idioma }}</b> — compreende {{ i.compreensao|lower }}, fala {{ i.fala|lower }}, lê {{ i.leitura|lower }}, escreve {{ i.escrita|lower }}</li>{% endfor %}</ul></div>{% endif %}
@@ -48,7 +48,7 @@
     <h3>{{ s.titulo }} <span class="count">{{ s.registros|length }}</span></h3>
     <ol class="registros">
       {% for r in s.registros %}
-      {% set lo = fl.ini or -999999 %}{% set hi = fl.fim or 999999 %}
+      {% set lo = fl.ai or -999999 %}{% set hi = fl.af or 999999 %}
       {% set fora = filtro and (r.ini is none or r.ini > hi or r.fim < lo) %}
       <li class="reg {{ 'fora' if fora }}">
         <div class="reg-main">
@@ -79,9 +79,62 @@
 <!-- ===================== ABA PONTUAÇÃO ===================== -->
 <section id="tab-pontuacao" class="tab-panel {{ 'active' if aba == 'pontuacao' }}">
   <div class="total-banner">
-    <div><div class="tb-rot">Total considerado</div><div class="tb-v">{{ '%.1f'|format(pont.total) }} <span>pontos</span></div></div>
-    <div class="tb-ctx">{{ descreve_filtros(fl) }}</div>
+    <div class="tb-topo">
+      <div><div class="tb-rot">Total considerado</div><div class="tb-v">{{ '%.1f'|format(pont.total) }} <span>pontos</span></div></div>
+      {% if sit.definido %}
+      <div class="tb-situacao {{ 'apto' if sit.apto else 'pendente' }}" role="status">
+        <span class="tb-icone" aria-hidden="true">{{ '✓' if sit.apto else '!' }}</span>
+        <span>{{ 'Atingiu os mínimos para a progressão' if sit.apto else 'Ainda não atingiu os mínimos para a progressão' }}</span>
+      </div>
+      {% endif %}
+      <div class="tb-ctx">{{ descreve_filtros(fl) }}</div>
+    </div>
+    {% if sit.total %}
+    <div class="tb-meta">
+      <div class="tb-barra" role="progressbar" aria-valuemin="0" aria-valuemax="{{ sit.total.minimo }}" aria-valuenow="{{ pont.total }}">
+        <div class="tb-barra-v" style="width: {{ '%.1f'|format(sit.total.pct) }}%"></div>
+      </div>
+      <div class="tb-meta-txt">
+        Mínimo total: <b>{{ '%g'|format(sit.total.minimo) }}</b> pontos ·
+        {% if sit.total.ok %}<b>✓ atingido</b>{% if pont.total > sit.total.minimo %} (+{{ '%.1f'|format(pont.total - sit.total.minimo) }}){% endif %}
+        {% else %}faltam <b>{{ '%.1f'|format(sit.total.falta) }}</b>{% endif %}
+      </div>
+    </div>
+    {% endif %}
+    {% if sit.grupos %}
+    <div class="tb-grupos">
+      {% for x in sit.grupos %}
+      <span class="tb-gchip {{ 'ok' if x.ok else 'falta' }}" title="Grupo {{ x.grupo }}: {{ '%.1f'|format(x.pontos) }} de {{ '%g'|format(x.minimo) }} pontos mínimos">
+        <span aria-hidden="true">{{ '✓' if x.ok else '✗' }}</span> Grupo {{ x.grupo }} · {{ '%.1f'|format(x.pontos) }}/{{ '%g'|format(x.minimo) }}{% if not x.ok %} · faltam {{ '%.1f'|format(x.falta) }}{% endif %}
+      </span>
+      {% endfor %}
+    </div>
+    {% elif not sit.definido %}
+    <div class="tb-meta-txt tb-sem-min">Nenhum mínimo definido. O admin define os mínimos por grupo e o total em Gestão → Tabela de valores.</div>
+    {% endif %}
   </div>
+
+  {% if grafico.tem_dados %}
+  <div class="box grafico-box">
+    <div class="grafico-cab">
+      <h3>Evolução por ano — todo o histórico do Lattes</h3>
+      <span class="small muted">{% if pont.filtro %}Anos fora do interstício em cinza.{% else %}Todo o currículo considerado.{% endif %} Grupos: os considerados na análise.</span>
+    </div>
+    <div class="grafico-area"><canvas id="grafico-evolucao" aria-label="Pontos por grupo e por ano" role="img"></canvas></div>
+    <details class="grafico-tabela"><summary class="small">Ver os dados em tabela</summary>
+      <div class="tabela-rolagem"><table class="tabela small">
+        <thead><tr><th>Ano</th>{% for d in grafico.datasets %}<th class="num">Grupo {{ d.grupo if d.grupo != 'outros' else 'outros' }}</th>{% endfor %}<th class="num">Total</th></tr></thead>
+        <tbody>
+        {% for a in grafico.anos %}{% set i = loop.index0 %}
+          <tr class="{{ '' if grafico.dentro[i] else 'zero' }}"><td>{{ a }}{% if pont.filtro and grafico.dentro[i] %} <span class="pill desconhecido">interstício</span>{% endif %}</td>
+            {% for d in grafico.datasets %}<td class="num">{{ '%.1f'|format(d.valores[i]) }}</td>{% endfor %}
+            <td class="num"><b>{{ '%.1f'|format(grafico.totais[i]) }}</b></td></tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+    </details>
+  </div>
+  {% endif %}
 
   <div class="gtabs" role="tablist">
     {% for g, nome in GRUPOS.items() %}
@@ -90,6 +143,8 @@
       <span class="gt-g">Grupo {{ g }}{% if not inc %} · fora da análise{% endif %}</span>
       <span class="gt-v">{{ '%.1f'|format(pont.totais_grupo.get(g, 0)) }} <small>pts</small></span>
       <span class="gt-nome">{{ nome }}</span>
+      {% set sx = sit.por_grupo.get(g) %}
+      {% if sx %}<span class="gt-min {{ 'ok' if sx.ok else 'falta' }}"><span aria-hidden="true">{{ '✓' if sx.ok else '✗' }}</span> mín. {{ '%g'|format(sx.minimo) }}{% if not sx.ok %} · faltam {{ '%.1f'|format(sx.falta) }}{% endif %}</span>{% endif %}
     </button>
     {% endfor %}
   </div>
@@ -128,6 +183,59 @@
 </section>
 {% endblock %}
 {% block scripts %}
+{% if grafico.tem_dados %}
+<script src="{{ url_for('static', filename='vendor/chart-4.4.1.umd.js') }}"></script>
+<script>
+(function () {
+  const G = {{ grafico|tojson }};
+  const el = document.getElementById('grafico-evolucao');
+  if (!el || !window.Chart) return;
+  // cinza com a mesma luminosidade da cor, clareado: fora do interstício
+  function cinza(hex) {
+    const n = parseInt(hex.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+    const l = Math.round(0.299 * r + 0.587 * g + 0.114 * b), v = Math.round(l + (255 - l) * 0.45);
+    return `rgb(${v},${v},${v})`;
+  }
+  const ds = G.datasets.map(d => ({
+    label: d.grupo === 'outros' ? d.nome : `Grupo ${d.grupo} — ${d.nome}`,
+    curto: d.grupo === 'outros' ? d.nome : `Grupo ${d.grupo}`,
+    data: d.valores,
+    backgroundColor: G.dentro.map(dentro => dentro ? d.cor : cinza(d.cor)),
+    borderColor: '#ffffff', borderWidth: { top: 2 }, borderRadius: 2, borderSkipped: 'bottom',
+    maxBarThickness: 46, categoryPercentage: 0.82, barPercentage: 0.9,
+  }));
+  const fmt = v => v.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+  new Chart(el, {
+    type: 'bar',
+    data: { labels: G.anos.map(String), datasets: ds },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        x: { stacked: true, grid: { display: false }, ticks: { color: '#5f5150' } },
+        y: { stacked: true, beginAtZero: true, grid: { color: '#efe7e7' }, border: { display: false },
+             ticks: { color: '#76605f', callback: v => fmt(v) }, title: { display: true, text: 'pontos', color: '#76605f' } }
+      },
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 12, boxHeight: 12, color: '#2a1b1d', usePointStyle: false,
+          generateLabels: ch => ch.data.datasets.map((d, i) => ({ text: d.label.length > 48 ? d.label.slice(0, 46) + '…' : d.label,
+            fillStyle: G.datasets[i].cor, strokeStyle: G.datasets[i].cor, lineWidth: 0, hidden: !ch.isDatasetVisible(i), datasetIndex: i })) } },
+        tooltip: {
+          filter: it => it.raw > 0,
+          itemSort: (a, b) => b.datasetIndex - a.datasetIndex,
+          callbacks: {
+            title: its => its.length ? `${its[0].label}${G.dentro[its[0].dataIndex] ? '' : ' · fora do interstício'}` : '',
+            label: it => ` ${it.dataset.curto}: ${fmt(it.raw)} pts`,
+            labelColor: it => ({ backgroundColor: G.datasets[it.datasetIndex].cor, borderColor: G.datasets[it.datasetIndex].cor }),
+            footer: its => its.length ? `Total: ${fmt(G.totais[its[0].dataIndex])} pts` : ''
+          }
+        }
+      }
+    }
+  });
+})();
+</script>
+{% endif %}
 <script>
 document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
   document.querySelectorAll('.tab, .tab-panel').forEach(e => e.classList.remove('active'));
