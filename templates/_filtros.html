@@ -32,6 +32,9 @@
 <script>
 (function () {
   const f = document.currentScript.previousElementSibling;
+  // ao escolher o início, o fim passa a ser o mesmo mês 2 anos depois; mudar o fim não altera o início
+  const mais2 = v => { const m = /^(\d{4})-(\d{2})$/.exec(v || ''); return m ? `${+m[1] + 2}-${m[2]}` : null; };
+  ['input', 'change'].forEach(ev => f.ini.addEventListener(ev, () => { const v = mais2(f.ini.value); if (v) f.fim.value = v; }));
   f.querySelectorAll('.chip-btn').forEach(b => b.addEventListener('click', () => {
     f.ini.value = b.dataset.ini; f.fim.value = b.dataset.fim; f.submit();
   }));

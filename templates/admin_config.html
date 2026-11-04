@@ -59,10 +59,10 @@
     </div>
 
     <div class="box">
-      <h3>eLattes</h3>
+      <h3>Fonte dos currículos</h3>
       <form method="post">
-        <label>URL do eLattes<input name="elattes_url" value="{{ elattes_url }}"></label>
-        <p class="muted small">Endpoints usados: <code>POST /download_cvs</code>, <code>GET /progress/&lt;job&gt;</code>, <code>GET /download_file/&lt;job&gt;</code>, <code>POST /get_last_update</code>.</p>
+        <label>URL do serviço de download dos currículos<input name="elattes_url" value="{{ elattes_url }}"></label>
+        <p class="muted small">Serviço institucional que fornece o XML do Currículo Lattes a partir do ID.</p>
         <button class="btn" type="submit">Salvar</button>
       </form>
     </div>
@@ -73,4 +73,11 @@
     </div>
   </div>
 </div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function(){ const i=document.querySelector('input[name=interst_ini]'), f=document.querySelector('input[name=interst_fim]'); if(!i||!f) return;
+  const mais2 = v => { const m=/^(\d{4})-(\d{2})$/.exec(v||''); return m ? `${+m[1]+2}-${m[2]}` : null; };
+  ['input','change'].forEach(ev => i.addEventListener(ev, () => { const v = mais2(i.value); if (v) f.value = v; })); })();
+</script>
 {% endblock %}

@@ -5,7 +5,7 @@ Importação de currículos Lattes e pontuação para progressão funcional doce
 Ferramenta web (Flask + SQLite) que:
 
 1. Lê um CSV com IDs Lattes de professores da UFPA (ou IDs digitados) e baixa os currículos no
-   **eLattes UFPA** (https://elattes.ufpa.br/) automaticamente: `POST /download_cvs` → `GET /progress/<job>`
+   **serviço institucional de download (elattes.ufpa.br)** (https://elattes.ufpa.br/) automaticamente: `POST /download_cvs` → `GET /progress/<job>`
    → `GET /download_file/<job>` (zip com `<id>.zip` → `<id>.xml`), extrai o XML e importa.
 2. Gera a **página de perfil** do professor com todos os itens do Lattes (formação, atuação, projetos,
    produção bibliográfica/técnica, orientações, bancas, eventos, prêmios…) e uma aba **Pontuação**
@@ -14,7 +14,7 @@ Ferramenta web (Flask + SQLite) que:
    (`POST /get_last_update`) ou **verde "Currículo Atualizado"** quando a versão importada é a mais recente.
 4. **Camada de gestão** (`/admin`, usuário `admin`, senha `senha`):
    - Professores incorporados, com data da última atualização no Lattes, data de importação e status;
-   - Importar (CSV/IDs via eLattes ou upload manual de zip/xml);
+   - Importar (CSV/IDs via serviço institucional ou upload manual de zip/xml);
    - Tabela de valores (abas por grupo): o admin edita **item**, **atividade**, **contagem** (por registro, por ano
      ou por semestre) e **valor** de cada um dos 175 itens (gradações como 24/12 viram variantes `.a/.b`);
      as edições não são sobrescritas em novos deploys; "Restaurar Anexo I" volta ao original;
@@ -31,9 +31,12 @@ Ferramenta web (Flask + SQLite) que:
   ensino, cargos, conselhos, estágios, participação em projetos e textos em jornal; a maior parte da
   produção (artigos, eventos, bancas, orientações) traz só o ano — nesse caso vale de janeiro a dezembro.
 - Itens contados por ano/semestre são proporcionais aos meses dentro do interstício (18 meses = 1,5 ano).
-- **Mínimos para progressão**: em Gestão → Tabela de valores o admin define o mínimo de cada grupo e o
-  mínimo total. O perfil mostra, no destaque do total, se cada grupo considerado e o total foram atingidos
-  (e quanto falta); a lista da gestão e o CSV trazem a coluna "Mínimos".
+- **Pontuação necessária**: em Gestão → Tabela de valores o admin informa a pontuação necessária para a
+  progressão. Regra aplicada: o Grupo I (ensino) não pode exceder 50% desse valor — o excedente é
+  descontado do total. O perfil mostra o total ajustado, se a pontuação necessária foi atingida e o
+  detalhe do Grupo I; a lista da gestão e o CSV trazem a coluna "Progressão".
+- Ao escolher o mês/ano inicial do interstício, o final passa automaticamente para o mesmo mês 2 anos
+  depois (o final pode ser alterado livremente sem mexer no inicial).
 - **Evolução por ano**: gráfico de barras empilhadas por grupo com todo o histórico do Lattes; anos fora do
   interstício ficam em cinza. Itens por ano/semestre se distribuem pelos meses de cada ano; os demais contam
   no ano final do registro. Há uma tabela com os mesmos dados. (Chart.js 4.4.1 incluído em `static/vendor/`.)
