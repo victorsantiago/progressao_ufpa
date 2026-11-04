@@ -269,3 +269,7 @@ label.inline input[type=month],.anos input[type=month]{width:160px}
 .lcard.movido{animation:destaque 1.2s ease-out}
 select.add-lattes{margin-top:6px;width:100%;max-width:420px;padding:5px 8px;border:1px dashed var(--line);border-radius:6px;font-size:13px;color:var(--pri-d);background:#fff;cursor:pointer}
 .gtab-sem{border-top-color:#cfd3d8}
+/* alertas de estrutura (XSD) */
+.pill.alerta{background:#fff3d6;color:#8a5a00;margin-top:4px}
+.alerta-xsd{border-left:4px solid #e0a100}
+.alerta-xsd summary b{color:#8a5a00}

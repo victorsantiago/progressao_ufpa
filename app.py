@@ -24,6 +24,7 @@ import fotos
 from genero import inferir_genero
 from elattes_client import ELattesClient, ELattesError, extrair_xmls
 from lattes_parser import PARSER_VERSAO, parse_lattes_xml
+from xsd_check import XSD_VERSAO
 from scoring import CATEGORIAS, CATEGORIAS_MAP, CONTAGENS, calcular_pontuacao, serie_anual, tabela_itens
 from scoring import GRUPOS as GRUPOS_ANEXO
 
@@ -622,13 +623,16 @@ def professor(pid):
     sit = situacao(pont, fl)
     grafico = dados_grafico(parsed, itens, fl)
     pontos_cat = {l["categoria"]: l for l in pont["linhas"]}
-    por_grupo = {g: [l for l in pont["linhas"] if l["grupo"] == g] for g in G()}
+    por_grupo = {g: [l for l in pont["linhas"] if l["grupo"] == g and l["item_key"]] for g in G()}
+    nao_pontuam = [l for l in pont["linhas"] if not l["item_key"]]
     grupo_ativo = request.args.get("grupo")
     if grupo_ativo not in G():
         # primeiro grupo considerado que tenha pontos; senão o primeiro considerado; senão I
         grupo_ativo = next((g for g in fl["grupos"] if pont["totais_grupo"][g] > 0),
                            fl["grupos"][0] if fl["grupos"] else "I")
-    return render_template("professor.html", prof=prof, cv=parsed, pont=pont, por_grupo=por_grupo, fl=fl,
+    if request.args.get("grupo") == "__sem":
+        grupo_ativo = "__sem"
+    return render_template("professor.html", prof=prof, cv=parsed, pont=pont, por_grupo=por_grupo, fl=fl, nao_pontuam=nao_pontuam,
                            fl_query=filtros_query(fl), pontos_cat=pontos_cat, status=status_atualizacao(prof),
                            aba=request.args.get("aba", "pontuacao"), grupo_ativo=grupo_ativo, sit=sit, grafico=grafico)
 
@@ -755,13 +759,18 @@ def admin_professores():
     itens, mapa = carregar_itens(db), carregar_mapeamento(db)
     profs = []
     for p in db.execute("SELECT * FROM professores ORDER BY nome").fetchall():
-        _, pont, _ = _montar_pontuacao(p, fl, itens, mapa)
-        profs.append({**dict(p), "total": pont["total"], "totais_grupo": pont["totais_grupo"], "sit": situacao(pont, fl, db)})
+        parsed, pont, _ = _montar_pontuacao(p, fl, itens, mapa)
+        est = parsed.get("estrutura") or {}
+        alertas = est.get("elementos", []) + [dict(a, caminho=f"{a['caminho']} @{a['nome']}") for a in est.get("atributos", [])]
+        profs.append({**dict(p), "total": pont["total"], "totais_grupo": pont["totais_grupo"], "sit": situacao(pont, fl, db),
+                      "alertas_xsd": alertas})
     ordem = request.args.get("ordem", "nome")
     if ordem == "pontos":
         profs.sort(key=lambda x: -x["total"])
     jobs = sorted(JOBS.values(), key=lambda j: j["criado_em"], reverse=True)[:10]
-    return render_template("admin_professores.html", profs=profs, jobs=jobs, fl=fl, fl_query=filtros_query(fl), ordem=ordem)
+    com_alerta = [p for p in profs if p["alertas_xsd"]]
+    return render_template("admin_professores.html", profs=profs, jobs=jobs, fl=fl, fl_query=filtros_query(fl), ordem=ordem,
+                           com_alerta=com_alerta, XSD_VERSAO=XSD_VERSAO)
 
 
 @app.route("/admin/professores/<pid>/persona", methods=["POST"])

@@ -15,6 +15,23 @@
   {% with filtros_action=url_for('admin_professores'), filtros_hidden={'ordem': ordem} %}{% include "_filtros.html" %}{% endwith %}
 </div>
 
+{% if com_alerta %}
+<details class="box alerta-xsd">
+  <summary><b>⚠ {{ com_alerta|length }} currículo(s) com elementos que o XSD do Lattes ({{ XSD_VERSAO }}) não prevê</b>
+    <span class="small muted">— o formato do Lattes pode ter mudado; algum item desses currículos pode não estar sendo lido nem pontuado.</span></summary>
+  <table class="tabela small" style="margin-top:8px">
+    <thead><tr><th>Professor</th><th>Elemento ou atributo não previsto no XSD</th><th class="num">Ocorrências</th></tr></thead>
+    <tbody>
+    {% for p in com_alerta %}{% for a in p.alertas_xsd %}
+      <tr>{% if loop.first %}<td rowspan="{{ p.alertas_xsd|length }}"><a href="{{ url_for('professor', pid=p.id) }}?aba=curriculo">{{ p.nome }}</a></td>{% endif %}
+        <td class="mono">{{ a.caminho }}</td><td class="num">{{ a.qtd }}</td></tr>
+    {% endfor %}{% endfor %}
+    </tbody>
+  </table>
+  <p class="small muted" style="margin:8px 0 0">A conferência é feita a cada importação, contra o esquema oficial do Extrator Lattes (CNPq) guardado no sistema.</p>
+</details>
+{% endif %}
+
 {% if jobs %}
 <details class="box">
   <summary><b>Importações recentes</b> <span class="count">{{ jobs|length }}</span></summary>
@@ -61,7 +78,8 @@
       <td>{{ p.data_atualizacao_br or '—' }}</td>
       <td>{{ p.importado_em|fmt_dt }}</td>
       <td>{{ p.remota_atualizacao or '—' }}</td>
-      <td><span class="pill {{ st }}">{{ {'atualizado':'Atualizado','desatualizado':'Desatualizado','desconhecido':'Não verificado'}[st] }}</span></td>
+      <td><span class="pill {{ st }}">{{ {'atualizado':'Atualizado','desatualizado':'Desatualizado','desconhecido':'Não verificado'}[st] }}</span>
+        {% if p.alertas_xsd %}<div><span class="pill alerta" title="{{ p.alertas_xsd|map(attribute='caminho')|join('\n') }}">⚠ fora do XSD</span></div>{% endif %}</td>
       <td class="num"><b>{{ '%.1f'|format(p.sit.total) }}</b>{% if p.sit.excedente_i > 0 %}<div class="muted small" title="Grupo I limitado a 50% da pontuação total">bruto {{ '%.1f'|format(p.total) }}</div>{% endif %}</td>
       <td class="acoes-col"><div class="acoes-prof">
         <form method="post" action="{{ url_for('professor_atualizar', pid=p.id) }}"><button class="btn tiny">Reimportar</button></form>

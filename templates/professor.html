@@ -119,6 +119,13 @@
       <span class="gt-nome">{{ nome }}</span>
     </button>
     {% endfor %}
+    {% if nao_pontuam %}
+    <button type="button" role="tab" class="gtab gtab-sem {{ 'active' if grupo_ativo == '__sem' }}" data-g="__sem" title="Itens do Lattes sem ligação com a tabela">
+      <span class="gt-g">Não pontuam · {{ nao_pontuam|length }}</span>
+      <span class="gt-v">{{ nao_pontuam|sum(attribute='registros', start=[])|length }} <small>registro(s){% if pont.filtro %} no interstício{% endif %}</small></span>
+      <span class="gt-nome">Itens do Lattes que não pontuam</span>
+    </button>
+    {% endif %}
   </div>
 
   {% for g, nome in GRUPOS.items() %}
@@ -151,6 +158,30 @@
     {% endif %}
   </div>
   {% endfor %}
+
+  {% if nao_pontuam %}
+  <div class="gpanel box {{ 'active' if grupo_ativo == '__sem' }}" id="gpanel-__sem" role="tabpanel">
+    <h3>Itens do Lattes que não pontuam <span class="count">{{ nao_pontuam|length }} tipo(s)</span></h3>
+    <p class="muted small" style="margin-top:-4px">Registros do currículo cujo tipo não está ligado a nenhum item da tabela de valores, por isso não somam pontos.
+      {% if session.get('admin') %}Para fazê-los pontuar, ligue-os a um item em <a href="{{ url_for('admin_mapeamento', grupo='__sem') }}">Mapeamento Tabela → Lattes</a>.{% endif %}</p>
+    <table class="tabela">
+      <thead><tr><th>Item do Lattes</th><th class="num">Registros{% if pont.filtro %} no interstício{% endif %}</th></tr></thead>
+      <tbody>
+      {% for l in nao_pontuam %}
+        <tr class="zero">
+          <td>
+            {% if l.registros %}<details><summary>{{ l.label }}</summary>
+              <ul class="plain small">{% for r in l.registros %}<li>{{ r.desc }}</li>{% endfor %}</ul>
+            </details>{% else %}<span class="label-sem-itens">{{ l.label }}</span>{% endif %}
+            {% if l.registros_fora %}<div class="small muted">{{ l.registros|length }} no interstício · {{ l.registros_fora|length }} fora</div>{% endif %}
+          </td>
+          <td class="num">{{ l.registros|length }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
   <p class="muted small">Calculado a partir do XML do Lattes com os valores e o mapeamento da gestão. {% if pont.filtro %}Só entram registros cujo período intercepta o interstício; itens contados por ano consideram apenas os anos dentro dele. {% endif %}Grupos fora da análise aparecem para referência, mas não somam no total. Itens sem correspondência no Lattes (ex.: carga horária de aulas) devem ser comprovados à parte.</p>
 </section>
 {% endblock %}
@@ -169,7 +200,7 @@
     return `rgb(${v},${v},${v})`;
   }
   const fmt = v => v.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
-  let modo = 'grupo', grupoAtual = {{ grupo_ativo|tojson }}, chart = null;
+  let modo = 'grupo', grupoAtual = {{ (grupo_ativo if grupo_ativo != '__sem' else (fl.grupos[0] if fl.grupos else 'I'))|tojson }}, chart = null;
   function dsDe(lista) {
     return lista.map(d => ({
       label: d.grupo === 'outros' ? d.nome : `Grupo ${d.grupo} — ${d.nome}`, curto: d.grupo === 'outros' ? d.nome : `Grupo ${d.grupo}`,
@@ -219,7 +250,7 @@
     document.querySelectorAll('.grafico-modo .chip-btn').forEach(x => x.classList.remove('active')); b.classList.add('active');
     modo = b.dataset.modo; desenhar();
   }));
-  document.querySelectorAll('.gtab').forEach(t => t.addEventListener('click', () => { grupoAtual = t.dataset.g; if (modo === 'grupo') desenhar(); }));
+  document.querySelectorAll('.gtab').forEach(t => t.addEventListener('click', () => { if (t.dataset.g === '__sem') return; grupoAtual = t.dataset.g; if (modo === 'grupo') desenhar(); }));
   desenhar();
 })();
 </script>

@@ -42,6 +42,18 @@ Ferramenta web (Flask + SQLite) que:
   no ano final do registro. Há uma tabela com os mesmos dados. (Chart.js 4.4.1 incluído em `static/vendor/`.)
 - Grupos desmarcados continuam visíveis, mas não somam no total.
 
+## Conferência com o XSD do Lattes
+
+O esquema oficial do Extrator Lattes (CNPq), versão de 12/09/2022, fica em `schema/CurriculoLattes_12_09_2022.xsd`.
+A cada importação o currículo é conferido contra ele: elementos ou atributos que o XSD não prevê (sinal de que o
+formato do Lattes mudou e de que algum item pode não estar sendo lido) aparecem num aviso no topo de
+Gestão › Professores e no status do professor (“⚠ fora do XSD”). Atributos que a exportação atual já envia e o XSD
+não declara (`PCD`, `ELETRONICO`, `OUTRA-FORMA-DE-CONTATO`, `REDE-SOCIAL`) não geram aviso.
+
+Todos os tipos de registro previstos no XSD são lidos. Os que não estão ligados a nenhum item da tabela aparecem no
+perfil, na aba “Itens do Lattes que não pontuam”, e na aba “Não pontuam” do Mapeamento, onde podem ser ligados.
+`python3 tests/test_xsd.py` confere essa cobertura e os alertas.
+
 ## Relatório em PDF
 
 No perfil, o botão **Gerar relatório (PDF)** do bloco *Interstício avaliado* gera um relatório com o interstício e os
@@ -95,6 +107,7 @@ Sem acesso ao eLattes, use a importação manual com `tests/exemplo_915742238690
 | `app.py` | Rotas Flask, banco SQLite, jobs de importação em segundo plano |
 | `elattes_client.py` | Cliente do eLattes (download em lote, progresso, zip aninhado, última atualização) |
 | `lattes_parser.py` | Parser do XML do Lattes → seções do perfil + contagem por categoria |
+| `xsd_check.py`, `schema/` | Conferência da estrutura do XML contra o XSD oficial do Lattes |
 | `scoring.py` | Tabela do Anexo I (8 grupos), categorias do Lattes, mapeamento padrão e cálculo |
 | `templates/`, `static/` | Interface |
 

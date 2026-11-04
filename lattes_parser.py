@@ -12,9 +12,10 @@ import re
 import xml.etree.ElementTree as ET
 
 from scoring import CATEGORIAS_MAP
+from xsd_check import verificar as verificar_xsd
 
 ANO_ATUAL = dt.date.today().year
-PARSER_VERSAO = 3
+PARSER_VERSAO = 4
 MES_ATUAL = dt.date.today().month
 
 _RE_PERIODO = re.compile(r"\((\d{4})(\s*[–-]\s*(\d{4}|atual)?)?\)")
@@ -228,7 +229,11 @@ def parse_lattes_xml(xml_bytes):
     _bancas(root, cv)
     _eventos(root, cv)
     _formacao_complementar(root, cv)
-    return cv.to_dict()
+    _licencas(root, cv)
+    _demais_trabalhos(root, cv)
+    d = cv.to_dict()
+    d["estrutura"] = verificar_xsd(root)
+    return d
 
 
 # ---------------------------------------------------------------------------
@@ -261,9 +266,12 @@ def _formacao(root, cv):
         a = _attrs(el)
         nivel = nomes.get(el.tag, el.tag.title())
         status = a.get("STATUS-DO-CURSO", "")
+        concl = a.get("ANO-DE-CONCLUSAO", "") or a.get("ANO-DE-OBTENCAO-DO-TITULO", "")
+        if el.tag == "LIVRE-DOCENCIA" and not status and concl:
+            status = "CONCLUIDO"   # a livre-docência registra só o ano de obtenção do título
         titulo = f"{nivel} em {a.get('NOME-CURSO', '')}".strip() if a.get("NOME-CURSO") else nivel
         sub = a.get("NOME-INSTITUICAO", "")
-        periodo = f"{a.get('ANO-DE-INICIO', '')} – {a.get('ANO-DE-CONCLUSAO', '') or 'atual'}"
+        periodo = f"{a.get('ANO-DE-INICIO', '')} – {concl or 'atual'}" if a.get("ANO-DE-INICIO") else concl
         det = {"Período": periodo, "Situação": status.title() if status else "",
                "Título do trabalho": _first(a, "TITULO-DA-DISSERTACAO-TESE", "TITULO-DO-TRABALHO-DE-CONCLUSAO-DE-CURSO", "TITULO-DO-TRABALHO"),
                "Orientador": _first(a, "NOME-COMPLETO-DO-ORIENTADOR", "NOME-DO-ORIENTADOR"),
@@ -272,10 +280,12 @@ def _formacao(root, cv):
         if status == "CONCLUIDO":
             cat = {"DOUTORADO": "form_doutorado", "LIVRE-DOCENCIA": "form_doutorado", "MESTRADO": "form_mestrado",
                    "MESTRADO-PROFISSIONALIZANTE": "form_mestrado", "POS-DOUTORADO": "form_posdoc",
-                   "ESPECIALIZACAO": "form_especializacao"}.get(el.tag)
+                   "ESPECIALIZACAO": "form_especializacao", "APERFEICOAMENTO": "form_aperfeicoamento",
+                   "GRADUACAO": "form_graduacao", "RESIDENCIA-MEDICA": "form_residencia",
+                   "CURSO-TECNICO-PROFISSIONALIZANTE": "form_tecnico"}.get(el.tag)
         if cat:
-            cv._add_cat(cat, f"{titulo} ({a.get('ANO-DE-CONCLUSAO', '')}) – {sub}")
-        sec["registros"].append(_reg(a, titulo=titulo, ano=a.get("ANO-DE-CONCLUSAO", ""), subtitulo=sub, categoria=cat, detalhes=det))
+            cv._add_cat(cat, f"{titulo} ({concl}) – {sub}")
+        sec["registros"].append(_reg(a, titulo=titulo, ano=concl, subtitulo=sub, categoria=cat, detalhes=det))
 
 
 def _atuacao(root, cv):
@@ -324,6 +334,23 @@ def _atuacao(root, cv):
             periodo = f"{a.get('ANO-INICIO', '')} – {a.get('ANO-FIM', '') or 'atual'}"
             cv._add_cat("estagio_realizado", f"{a.get('ESTAGIO-REALIZADO', '')} – {inst} ({periodo})", meses=_meses(a))
             sec["registros"].append(_reg(a, titulo=f"Estágio: {a.get('ESTAGIO-REALIZADO', '')}", ano=periodo, subtitulo=inst, categoria="estagio_realizado"))
+        for tag, cat, campo, rotulo in (
+                ("EXTENSAO-UNIVERSITARIA", "atividade_extensao", "ATIVIDADE-DE-EXTENSAO-REALIZADA", "Extensão universitária"),
+                ("SERVICO-TECNICO-ESPECIALIZADO", "servico_tecnico", "SERVICO-REALIZADO", "Serviço técnico especializado"),
+                ("OUTRA-ATIVIDADE-TECNICO-CIENTIFICA", "outra_atividade_tc", "ATIVIDADE-REALIZADA", "Outra atividade técnico-científica"),
+                ("PESQUISA-E-DESENVOLVIMENTO", "atividade_pd", None, "Pesquisa e desenvolvimento")):
+            for x in ap.iter(tag):
+                a = _attrs(x)
+                periodo = f"{a.get('ANO-INICIO', '')} – {a.get('ANO-FIM', '') or 'atual'}"
+                linhas = [l.get("TITULO-DA-LINHA-DE-PESQUISA", "") for l in x.findall("LINHA-DE-PESQUISA") if l.get("TITULO-DA-LINHA-DE-PESQUISA")]
+                oque = a.get(campo, "") if campo else "; ".join(linhas)
+                orgao = " – ".join(v for v in (a.get("NOME-ORGAO", ""), a.get("NOME-UNIDADE", "")) if v)
+                cv._add_cat(cat, f"{rotulo}: {oque or orgao or inst} – {inst} ({periodo})",
+                            _years(a.get("ANO-INICIO"), a.get("ANO-FIM")), meses=_meses(a))
+                det = {"Órgão": orgao}
+                if linhas:
+                    det["Linhas de pesquisa"] = "; ".join(linhas)
+                sec["registros"].append(_reg(a, titulo=f"{rotulo}: {oque}" if oque else rotulo, ano=periodo, subtitulo=inst, categoria=cat, detalhes=det))
         for t in ap.iter("TREINAMENTO-MINISTRADO"):
             a = _attrs(t)
             periodo = f"{a.get('ANO-INICIO', '')} – {a.get('ANO-FIM', '') or 'atual'}"
@@ -455,6 +482,13 @@ def _producao_bibliografica(root, cv):
         cv._add_cat("texto_jornal", f"{_titulo(a)} – {jr} ({_ano(a)})", meses=(mpub, mpub))
         sec_jor["registros"].append(_reg(a, subtitulo=jr, categoria="texto_jornal", autores=_autores(el),
                                          detalhes={"Natureza": a.get("NATUREZA", "").replace("_", " ").title(), "Data": a.get("DATA-DE-PUBLICACAO", "")}))
+    sec_aceito = cv._add_secao("artigos_aceitos", "Artigos aceitos para publicação")
+    for el in pb.iter("ARTIGO-ACEITO-PARA-PUBLICACAO"):
+        a = _merge(el)
+        per = a.get("TITULO-DO-PERIODICO-OU-REVISTA", "")
+        cv._add_cat("artigo_aceito", f"{_titulo(a)} – {per} ({_ano(a)})")
+        sec_aceito["registros"].append(_reg(a, subtitulo=per, categoria="artigo_aceito", autores=_autores(el),
+                                            detalhes={"Periódico": per, "ISSN": a.get("ISSN", ""), "DOI": a.get("DOI", ""), "Idioma": a.get("IDIOMA", "")}))
     demais = pb.find("DEMAIS-TIPOS-DE-PRODUCAO-BIBLIOGRAFICA")
     if demais is not None:
         for el in demais:
@@ -492,6 +526,18 @@ def _producao_tecnica(root, cv):
         det = {"Código": reg.get("CODIGO-DO-REGISTRO-OU-PATENTE", "") if reg is not None else "", "Depósito": reg.get("DATA-PEDIDO-DE-DEPOSITO", "") if reg is not None else "",
                "Concessão": reg.get("DATA-DE-CONCESSAO", "") if reg is not None else "", "Finalidade": a.get("FINALIDADE", "")}
         sec_pat["registros"].append(_reg(a, subtitulo="Concedida" if concedida else "Depositada", categoria=cat, autores=_autores(el), detalhes=det))
+    for tag, cat, label in (("MARCA", "marca", "Marca"), ("DESENHO-INDUSTRIAL", "desenho_industrial", "Desenho industrial"),
+                            ("CULTIVAR-REGISTRADA", "cultivar_registrada", "Cultivar registrada"),
+                            ("CULTIVAR-PROTEGIDA", "cultivar_protegida", "Cultivar protegida"),
+                            ("TOPOGRAFIA-DE-CIRCUITO-INTEGRADO", "topografia_circuito", "Topografia de circuito integrado")):
+        for el in pt.findall(tag):
+            a = _merge(el)
+            titulo = _titulo(a) or a.get("DENOMINACAO", "")
+            cod = a.get("REGISTRO-OU-PATENTE.CODIGO-DO-REGISTRO-OU-PATENTE", "")
+            cv._add_cat(cat, f"{titulo} ({_ano(a)}) – {label}")
+            sec_pat["registros"].append(_reg(a, titulo=titulo, subtitulo=label, categoria=cat, autores=_autores(el),
+                                             detalhes={"Finalidade": a.get("FINALIDADE", ""), "Registro": cod,
+                                                       "Instituição de registro": a.get("REGISTRO-OU-PATENTE.INSTITUICAO-DEPOSITO-REGISTRO", "")}))
     for tag, cat, label in (("PRODUTO-TECNOLOGICO", "produto_tecnologico", "Produto tecnológico"), ("PROCESSOS-OU-TECNICAS", "processo_tecnica", "Processo ou técnica")):
         for el in pt.findall(tag):
             a = _merge(el)
@@ -683,3 +729,34 @@ def _formacao_complementar(root, cv):
         cv._add_cat(cat, f"{a.get('NOME-CURSO', '')} – {a.get('NOME-INSTITUICAO', '')} ({periodo}){' – ' + ch + ' h' if ch else ''}")
         sec["registros"].append(_reg(a, titulo=a.get("NOME-CURSO", ""), ano=periodo, subtitulo=a.get("NOME-INSTITUICAO", ""), categoria=cat,
                                      detalhes={"Carga horária": f"{ch} h" if ch else "", "Situação": a.get("STATUS-DO-CURSO", "").title()}))
+
+
+def _data_ddmmaaaa(v):
+    """'DDMMAAAA' -> (ano, mês) ou (None, None)."""
+    v = (v or "").strip()
+    if len(v) == 8 and v.isdigit():
+        return v[4:], _mes(v[2:4])
+    return None, None
+
+
+def _licencas(root, cv):
+    sec = cv._add_secao("licencas", "Licenças")
+    for el in root.iter("LICENCA"):
+        a = _attrs(el)
+        ai, mi = _data_ddmmaaaa(a.get("DATA-INICIO-LICENCA"))
+        af, mf = _data_ddmmaaaa(a.get("DATA-FIM-LICENCA"))
+        tipo = a.get("TIPO-LICENCA", "").replace("_", " ").capitalize() or "Licença"
+        periodo = f"{ai} – {af or 'atual'}" if ai else ""
+        cv._add_cat("licenca", f"{tipo} ({periodo})" if periodo else tipo, _years(ai, af), meses=(mi, mf if af else None))
+        sec["registros"].append(_reg(a, titulo=tipo, ano=periodo, categoria="licenca",
+                                     detalhes={"Início": a.get("DATA-INICIO-LICENCA", ""), "Fim": a.get("DATA-FIM-LICENCA", "")}))
+
+
+def _demais_trabalhos(root, cv):
+    sec = cv._add_secao("demais_trabalhos", "Demais trabalhos")
+    for el in root.findall("OUTRA-PRODUCAO/DEMAIS-TRABALHOS"):
+        a = _merge(el)
+        nat = a.get("NATUREZA", "")
+        cv._add_cat("demais_trabalhos", f"{_titulo(a)} ({_ano(a)})" + (f" – {nat}" if nat else ""))
+        sec["registros"].append(_reg(a, subtitulo=nat, categoria="demais_trabalhos", autores=_autores(el),
+                                     detalhes={"Finalidade": a.get("FINALIDADE", ""), "Local": a.get("LOCAL", "")}))
