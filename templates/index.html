@@ -12,7 +12,7 @@
 {% for p in profs %}
   {% set st = status_atualizacao(p) %}
   <a class="card" href="{{ url_for('professor', pid=p.id) }}" data-busca="{{ (p.nome ~ ' ' ~ p.id)|lower }}">
-    <div class="avatar"><span>{{ p.nome[:1] if p.nome else '?' }}</span>{% if fotos_on %}<img src="{{ url_for('professor_foto', pid=p.id) }}" alt="" loading="lazy" onerror="this.remove()">{% endif %}</div>
+    {% with av_id=p.id, av_nome=p.nome, av_genero=genero_de(p), av_classe='' %}{% include "_avatar.html" %}{% endwith %}
     <div class="card-body">
       <div class="card-title">{{ p.nome }}</div>
       <div class="card-sub">ID Lattes {{ p.id }}</div>

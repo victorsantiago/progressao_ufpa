@@ -3,14 +3,12 @@
 {% block content %}
 {% set filtro = pont.filtro %}
 <div class="profile-head">
-  <div class="avatar big"><span>{{ cv.dados.nome[:1] }}</span>{% if fotos_on %}<img src="{{ url_for('professor_foto', pid=prof.id) }}" alt="Foto de {{ cv.dados.nome }}" onerror="this.remove()">{% endif %}</div>
+  {% with av_id=prof.id, av_nome=cv.dados.nome, av_genero=genero_de(prof), av_classe='big' %}{% include "_avatar.html" %}{% endwith %}
   <div class="profile-info">
     <h1>{{ cv.dados.nome }}</h1>
     <div class="muted">ID Lattes {{ prof.id }}{% if cv.dados.orcid %} · ORCID {{ cv.dados.orcid }}{% endif %}
-      · <a href="https://lattes.cnpq.br/{{ prof.id }}" target="_blank" rel="noopener">Lattes ↗</a>
-      · <a href="{{ url_for('professor_xml', pid=prof.id) }}">XML</a></div>
-    <div class="muted small">Lattes atualizado em <b>{{ prof.data_atualizacao_br }}</b> · importado em {{ prof.importado_em|fmt_dt }}
-      · <span id="verif-info">{% if prof.verificado_em %}verificado no eLattes em {{ prof.verificado_em|fmt_dt }}{% else %}ainda não verificado no eLattes{% endif %}</span></div>
+      · <a href="https://lattes.cnpq.br/{{ prof.id }}" target="_blank" rel="noopener">Lattes ↗</a></div>
+    <div class="muted small">Lattes atualizado em <b>{{ prof.data_atualizacao_br }}</b> · importado em {{ prof.importado_em|fmt_dt }}</div>
     <div class="score-badge"><b>{{ '%.1f'|format(pont.total) }}</b> pontos <span class="score-ctx">{{ descreve_filtros(fl) }}</span></div>
   </div>
   <div class="profile-actions">
@@ -108,12 +106,11 @@
       {% for l in linhas %}
         <tr class="{{ 'zero' if (not l.item_key or l.qtd == 0) }}">
           <td>
-            <details><summary>{{ l.label }}</summary>
+            {% if l.registros %}<details><summary>{{ l.label }}</summary>
               <ul class="plain small">
                 {% for r in l.registros %}<li>{{ r.desc }}{% if l.modo == 'years' %} <span class="muted">— {{ '%g'|format(r.qtd_considerada) }} ano(s){% if pont.filtro %} no interstício{% endif %}</span>{% endif %}</li>{% endfor %}
-                {% for r in l.registros_fora %}<li class="fora-li">{{ r.desc }} <span class="muted">— {{ r.motivo }}</span></li>{% endfor %}
               </ul>
-            </details>
+            </details>{% else %}<span class="label-sem-itens">{{ l.label }}</span>{% endif %}
             {% if l.registros_fora %}<div class="small muted">{{ l.registros|length }} no interstício · {{ l.registros_fora|length }} fora</div>{% endif %}
           </td>
           <td class="small">{% if l.item_key %}<b>{{ l.item_key }}</b> {{ l.item_atividade }}{% else %}<i class="muted">não pontua</i>{% endif %}</td>
@@ -154,7 +151,6 @@ document.querySelectorAll('.gtab').forEach(t => t.addEventListener('click', () =
     if (d.status === 'atualizado') { btn.classList.add('atualizado'); btn.textContent = '✓ Currículo Atualizado'; btn.disabled = true; hint.textContent = 'Versão mais recente do Lattes (' + d.remota + ')'; }
     else if (d.status === 'desatualizado') { btn.classList.add('desatualizado'); btn.textContent = '⟳ Atualizar'; btn.disabled = false; hint.textContent = 'Nova versão no Lattes: ' + d.remota; }
     else { btn.classList.add('desconhecido'); btn.textContent = '⟳ Atualizar'; btn.disabled = false; hint.textContent = 'Não foi possível verificar no eLattes agora.'; hint.title = d.erro || ''; }
-    if (d.verificado_em) document.getElementById('verif-info').textContent = 'verificado no eLattes em ' + d.verificado_em;
   } catch (e) { hint.textContent = 'Não foi possível verificar no eLattes.'; }
 })();
 </script>

@@ -1,0 +1,29 @@
+{# Avatar do professor: persona (M/F/N) e, se houver, a foto do Lattes por cima.
+   Uso: {% with av_id=..., av_nome=..., av_genero=..., av_classe='big' %}{% include "_avatar.html" %}{% endwith %} #}
+<div class="avatar {{ av_classe or '' }}" title="{{ av_nome }}">
+  {% if av_genero == 'F' %}
+  <svg viewBox="0 0 100 100" aria-hidden="true">
+    <rect width="100" height="100" fill="#e4f5eb"/>
+    <path d="M29 46C29 25 39 18 50 18s21 7 21 28l1 22c-5 4-11 4-15 0H43c-4 4-10 4-15 0z" fill="#1d5e3d"/>
+    <path d="M17 100c0-21 14-33 33-33s33 12 33 33z" fill="#2b8455"/>
+    <path d="M41 67q9 11 18 0z" fill="#fff"/>
+    <circle cx="50" cy="44" r="16" fill="#8fd1ad"/>
+    <path d="M34 43c1-12 8-18 17-18 9 0 15 6 16 16-7-6-15-7-22-4-5 2-8 4-11 6z" fill="#1d5e3d"/>
+  </svg>
+  {% elif av_genero == 'M' %}
+  <svg viewBox="0 0 100 100" aria-hidden="true">
+    <rect width="100" height="100" fill="#e4f5eb"/>
+    <path d="M17 100c0-21 14-33 33-33s33 12 33 33z" fill="#2b8455"/>
+    <path d="M43 67l7 13 7-13z" fill="#fff"/>
+    <circle cx="50" cy="43" r="17" fill="#8fd1ad"/>
+    <path d="M33 41c0-14 8-20 17-20 10 0 17 6 17 17-5-6-12-8-20-7-6 1-11 4-14 10z" fill="#1d5e3d"/>
+  </svg>
+  {% else %}
+  <svg viewBox="0 0 100 100" aria-hidden="true">
+    <rect width="100" height="100" fill="#e4f5eb"/>
+    <path d="M17 100c0-21 14-33 33-33s33 12 33 33z" fill="#2b8455"/>
+    <circle cx="50" cy="43" r="17" fill="#8fd1ad"/>
+  </svg>
+  {% endif %}
+  {% if fotos_on %}<img src="{{ url_for('professor_foto', pid=av_id) }}" alt="" loading="lazy" onerror="this.remove()">{% endif %}
+</div>

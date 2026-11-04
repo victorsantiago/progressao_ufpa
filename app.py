@@ -20,6 +20,7 @@ from flask import (Flask, abort, flash, g, jsonify, redirect, render_template, r
                    send_file, session, url_for)
 
 import fotos
+from genero import inferir_genero
 from elattes_client import ELattesClient, ELattesError, extrair_xmls
 from lattes_parser import PARSER_VERSAO, parse_lattes_xml
 from scoring import CATEGORIAS, CATEGORIAS_MAP, GRUPOS, calcular_pontuacao, tabela_itens
@@ -95,7 +96,7 @@ def init_db():
     for c in CATEGORIAS:
         con.execute("INSERT OR IGNORE INTO mapeamento (categoria, item_key) VALUES (?,?)", (c[0], c[3]))
     cols = {r["name"] for r in con.execute("PRAGMA table_info(professores)")}
-    for col in ("id_k", "foto_tentativa"):
+    for col in ("id_k", "foto_tentativa", "genero_manual"):
         if col not in cols:
             con.execute(f"ALTER TABLE professores ADD COLUMN {col} TEXT")
     for chave, valor in (("elattes_url", "https://elattes.ufpa.br"), ("interst_ini", ""), ("interst_fim", ""), ("exibir_fotos", "1"),
@@ -190,6 +191,19 @@ app.jinja_env.globals["GRUPOS"] = GRUPOS
 app.jinja_env.globals["status_atualizacao"] = status_atualizacao
 app.jinja_env.globals["APP_NOME"] = APP_NOME
 app.jinja_env.globals["APP_SUB"] = APP_SUB
+
+
+def genero_de(prof):
+    """Persona do avatar: escolha manual do admin ou palpite pelo primeiro nome."""
+    try:
+        manual = prof["genero_manual"]
+    except (KeyError, IndexError):
+        manual = None
+    return manual if manual in ("M", "F", "N") else inferir_genero(prof["nome"])
+
+
+app.jinja_env.globals["genero_de"] = genero_de
+app.jinja_env.globals["inferir_genero"] = inferir_genero
 
 
 def logo_path():
@@ -401,7 +415,7 @@ def admin_logout():
 @app.route("/")
 def index():
     db = get_db()
-    profs = db.execute("SELECT id, nome, data_atualizacao, data_atualizacao_br, importado_em, remota_atualizacao, verificado_em FROM professores ORDER BY nome").fetchall()
+    profs = db.execute("SELECT id, nome, data_atualizacao, data_atualizacao_br, importado_em, remota_atualizacao, verificado_em, genero_manual FROM professores ORDER BY nome").fetchall()
     return render_template("index.html", profs=profs)
 
 
@@ -510,6 +524,16 @@ def admin_professores():
         profs.sort(key=lambda x: -x["total"])
     jobs = sorted(JOBS.values(), key=lambda j: j["criado_em"], reverse=True)[:10]
     return render_template("admin_professores.html", profs=profs, jobs=jobs, fl=fl, fl_query=filtros_query(fl), ordem=ordem)
+
+
+@app.route("/admin/professores/<pid>/persona", methods=["POST"])
+@login_required
+def admin_persona(pid):
+    v = request.form.get("genero")
+    db = get_db()
+    db.execute("UPDATE professores SET genero_manual=? WHERE id=?", (v if v in ("M", "F", "N") else None, pid))
+    db.commit()
+    return redirect(request.referrer or url_for("admin_professores"))
 
 
 @app.route("/admin/professores/<pid>/remover", methods=["POST"])

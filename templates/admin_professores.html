@@ -40,7 +40,23 @@
   {% for p in profs %}
     {% set st = status_atualizacao(p) %}
     <tr>
-      <td><a href="{{ url_for('professor', pid=p.id) }}?{{ fl_query }}&aba=pontuacao">{{ p.nome }}</a></td>
+      <td>
+        <div class="nome-cel">
+          {% with av_id=p.id, av_nome=p.nome, av_genero=genero_de(p), av_classe='mini' %}{% include "_avatar.html" %}{% endwith %}
+          <div>
+            <a href="{{ url_for('professor', pid=p.id) }}?{{ fl_query }}&aba=pontuacao">{{ p.nome }}</a>
+            <form method="post" action="{{ url_for('admin_persona', pid=p.id) }}" class="persona-form">
+              {% set auto = inferir_genero(p.nome) %}
+              <select name="genero" onchange="this.form.submit()" title="Avatar exibido no perfil">
+                <option value="" {{ 'selected' if p.genero_manual not in ('M','F','N') }}>Avatar: automático ({{ {'M':'masculino','F':'feminino','N':'neutro'}[auto] }})</option>
+                <option value="M" {{ 'selected' if p.genero_manual == 'M' }}>Avatar: masculino</option>
+                <option value="F" {{ 'selected' if p.genero_manual == 'F' }}>Avatar: feminino</option>
+                <option value="N" {{ 'selected' if p.genero_manual == 'N' }}>Avatar: neutro</option>
+              </select>
+            </form>
+          </div>
+        </div>
+      </td>
       <td class="mono">{{ p.id }}</td>
       <td>{{ p.data_atualizacao_br or '—' }}</td>
       <td>{{ p.importado_em|fmt_dt }}</td>
