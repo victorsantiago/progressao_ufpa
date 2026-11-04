@@ -165,3 +165,23 @@ body.buscando .gpanel.sem-resultado{display:none}
 body.buscando .gtabs{opacity:.45}
 select.sel.sem-item{color:var(--muted);background:#f7faf8}
 .tabela-edit textarea.ativ{overflow:hidden}
+/* abas de grupos: várias linhas, nome completo visível */
+.gtabs{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px;margin-bottom:12px}
+.gtab{border:1px solid var(--line);border-top:3px solid var(--pri);border-radius:10px;padding:10px 12px;gap:3px;background:#fff}
+.gtab .gt-nome{font-size:13px;line-height:1.3;color:var(--ink);white-space:normal}
+.gtab.active{background:var(--pri-ll);border-color:var(--pri-d);border-top-color:var(--pri-d);box-shadow:0 0 0 1px var(--pri-d) inset}
+.gtab.active .gt-nome{font-weight:600}
+.gtab.excluido .gt-nome{color:var(--muted)}
+.gtab-novo{border-style:dashed;border-top-style:solid;border-top-color:var(--line)}
+.gtab-novo .gt-nome{color:var(--pri-d);font-weight:700}
+.gpanel{border-radius:12px;border-color:var(--line)}
+@media(max-width:900px){.gtabs{grid-template-columns:repeat(auto-fill,minmax(180px,1fr))}.gtab{border-bottom:1px solid var(--line)}}
+/* cabeçalho do grupo (nome editável) e remoção de item */
+.grupo-cab{display:flex;align-items:flex-end;gap:12px;margin-bottom:6px}
+.grupo-nome{flex:1;margin-bottom:6px}
+.grupo-nome input{font-size:16px;font-weight:700;color:var(--ink)}
+.grupo-nome input.changed{border-color:var(--amber);background:#fff8e8}
+.icon-btn{border:1px solid transparent;background:none;color:var(--muted);cursor:pointer;border-radius:6px;padding:4px 7px;font-size:13px}
+.icon-btn:hover{color:var(--red);border-color:#f3c2bd;background:#fdeceb}
+/* mapeamento: tag do XML */
+.tag-xml{display:block;margin-top:3px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;color:var(--muted);line-height:1.4}

@@ -4,34 +4,46 @@
 <form method="post" id="form-tabela">
   <input type="hidden" name="grupo" id="grupo-atual" value="{{ grupo_ativo }}">
   <div class="tabela-topo sticky-save">
-    <button class="btn primary" type="submit">Salvar valores</button>
+    <button class="btn primary" type="submit" name="acao" value="salvar">Salvar valores</button>
     <div class="actions">
       <input type="search" id="busca" placeholder="Filtrar itens em todos os grupos…" class="busca">
       <button class="btn" type="submit" name="acao" value="restaurar" formnovalidate
-              onclick="return confirm('Restaurar item, atividade, contagem e valor de todos os itens para o Anexo I original?')">Restaurar Anexo I</button>
+              onclick="return confirm('Restaurar nome dos grupos e item, atividade, contagem e valor de todos os itens do Anexo I? Grupos e itens criados por você serão mantidos.')">Restaurar Anexo I</button>
     </div>
   </div>
 
-  <div class="gtabs" role="tablist">
+  <div class="gtabs gtabs-wrap" role="tablist">
     {% for g, nome in GRUPOS.items() %}
-    <button type="button" role="tab" class="gtab {{ 'active' if g == grupo_ativo }}" data-g="{{ g }}" title="{{ nome }}">
-      <span class="gt-g">Grupo {{ g }}</span>
-      <span class="gt-v">{{ por_grupo[g]|length }} <small>itens</small></span>
-      <span class="gt-n">{{ nome }}</span>
+    <button type="button" role="tab" class="gtab {{ 'active' if g == grupo_ativo }}" data-g="{{ g }}">
+      <span class="gt-g">Grupo {{ g }} · {{ por_grupo[g]|length }} {{ 'item' if por_grupo[g]|length == 1 else 'itens' }}</span>
+      <span class="gt-nome" id="tabnome-{{ g }}">{{ nome }}</span>
     </button>
     {% endfor %}
+    <button type="button" role="tab" class="gtab gtab-novo {{ 'active' if not grupo_ativo }}" data-g="__novo">
+      <span class="gt-g">Novo</span>
+      <span class="gt-nome">+ Novo grupo</span>
+    </button>
   </div>
 
   {% for g, nome in GRUPOS.items() %}
   <div class="gpanel box {{ 'active' if g == grupo_ativo }}" id="gpanel-{{ g }}" role="tabpanel">
-    <h3>Grupo {{ g }} — {{ nome }}</h3>
+    <div class="grupo-cab">
+      <label class="grupo-nome">Grupo {{ g }} — nome
+        <input name="grupo_nome__{{ g }}" value="{{ nome }}" data-g="{{ g }}" required maxlength="200">
+      </label>
+      {% if g not in originais %}
+      <button class="btn tiny danger" type="submit" name="acao" value="del_grupo:{{ g }}" formnovalidate
+              onclick="return confirm('Remover o grupo {{ g }} e todos os seus itens?')">Remover grupo</button>
+      {% endif %}
+    </div>
     <table class="tabela tabela-edit">
       <thead><tr>
         <th style="width:96px">Item</th>
         <th>Atividade</th>
-        <th style="width:22%">Alimentado por (Lattes)</th>
+        <th style="width:21%">Alimentado por (Lattes)</th>
         <th style="width:150px">Contagem</th>
-        <th class="num" style="width:100px">Valor</th>
+        <th class="num" style="width:96px">Valor</th>
+        <th style="width:34px"></th>
       </tr></thead>
       <tbody>
       {% for it in por_grupo[g] %}
@@ -45,47 +57,73 @@
             </select>
           </td>
           <td class="num"><input type="number" step="0.5" min="0" name="valor__{{ it.key }}" value="{{ '%g'|format(it.valor) }}" class="val"></td>
+          <td><button class="icon-btn" type="submit" name="acao" value="del_item:{{ it.key }}" formnovalidate title="Remover item {{ it.codigo }}"
+                      onclick="return confirm('Remover o item {{ it.codigo }}?{{ ' Ele recebe itens do Lattes no Mapeamento, que deixarão de pontuar.' if cats_por_item.get(it.key) }}')">✕</button></td>
         </tr>
+      {% else %}
+        <tr><td colspan="6" class="muted">Nenhum item neste grupo.</td></tr>
       {% endfor %}
       </tbody>
     </table>
+    <button class="btn" type="submit" name="acao" value="add_item:{{ g }}" style="margin-top:10px">+ Adicionar item</button>
   </div>
   {% endfor %}
+
+  <div class="gpanel box {{ 'active' if not grupo_ativo }}" id="gpanel-__novo" role="tabpanel">
+    <h3>Novo grupo</h3>
+    <p class="muted small">O grupo recebe o próximo número romano disponível e já vem com um item para você editar. Ele entra na análise padrão (Configuração) e aparece nos filtros do perfil.</p>
+    <div class="anos">
+      <label class="grupo-nome" style="flex:1">Nome do grupo
+        <input name="novo_grupo_nome" maxlength="200" placeholder="Ex.: Atividades de internacionalização">
+      </label>
+      <button class="btn primary" type="submit" name="acao" value="add_grupo" formnovalidate>Criar grupo</button>
+    </div>
+  </div>
+
   <p class="muted small"><b>Contagem</b>: <i>por registro</i> — cada item do Lattes conta uma vez (disciplinas e blocos de 3 h contam pela quantidade);
     <i>por ano</i> — conta os anos de duração dentro do interstício; <i>por semestre</i> — conta 2 por ano de duração dentro do interstício.
-    “Alimentado por” mostra os itens do Lattes ligados a cada item (ajustável em <a href="{{ url_for('admin_mapeamento') }}">Mapeamento</a>).</p>
+    “Alimentado por” mostra os itens do Lattes ligados a cada item (ajustável em <a href="{{ url_for('admin_mapeamento') }}">Mapeamento</a>).
+    Grupos do Anexo I podem ser renomeados; grupos criados por você também podem ser removidos.</p>
 </form>
 {% endblock %}
 {% block scripts %}
 <script>
 const tabs = document.querySelectorAll('.gtab'), panels = document.querySelectorAll('.gpanel');
-// caixas de atividade crescem conforme o texto
 function ajustar(el) { el.style.height = 'auto'; el.style.height = (el.scrollHeight + 2) + 'px'; }
-function ajustarVisiveis() { document.querySelectorAll('.gpanel').forEach(p => { if (p.offsetParent) p.querySelectorAll('textarea.ativ').forEach(ajustar); }); }
+function ajustarVisiveis() { panels.forEach(p => { if (p.offsetParent) p.querySelectorAll('textarea.ativ').forEach(ajustar); }); }
 document.querySelectorAll('textarea.ativ').forEach(t => t.addEventListener('input', () => ajustar(t)));
 function ativar(g) {
   tabs.forEach(t => t.classList.toggle('active', t.dataset.g === g));
   panels.forEach(p => p.classList.toggle('active', p.id === 'gpanel-' + g));
-  document.getElementById('grupo-atual').value = g;
-  const u = new URL(location.href); u.searchParams.set('grupo', g); history.replaceState(null, '', u);
+  document.getElementById('grupo-atual').value = g === '__novo' ? '' : g;
+  const u = new URL(location.href); if (g === '__novo') u.searchParams.delete('grupo'); else u.searchParams.set('grupo', g);
+  history.replaceState(null, '', u);
   ajustarVisiveis();
+  if (g === '__novo') document.querySelector('input[name=novo_grupo_nome]').focus();
 }
 tabs.forEach(t => t.addEventListener('click', () => { document.getElementById('busca').value = ''; filtrar(''); ativar(t.dataset.g); }));
-// a busca procura em todos os grupos: mostra todos os painéis com resultados
 function filtrar(q) {
   document.body.classList.toggle('buscando', !!q);
   panels.forEach(p => {
+    if (p.id === 'gpanel-__novo') { p.classList.toggle('sem-resultado', !!q); return; }
     let n = 0;
     p.querySelectorAll('.item-row').forEach(r => { const ok = !q || r.dataset.busca.includes(q); r.style.display = ok ? '' : 'none'; n += ok; });
     p.classList.toggle('sem-resultado', !!q && n === 0);
   });
 }
 document.getElementById('busca').addEventListener('input', e => { filtrar(e.target.value.toLowerCase().trim()); ajustarVisiveis(); });
-window.addEventListener('load', ajustarVisiveis); ajustarVisiveis();
-// marca campos alterados
-document.querySelectorAll('.tabela-edit input, .tabela-edit textarea, .tabela-edit select').forEach(el => {
-  const ini = el.value; el.addEventListener('input', () => el.classList.toggle('changed', el.value !== ini));
-  el.addEventListener('change', () => el.classList.toggle('changed', el.value !== ini));
+// nome do grupo editado atualiza a aba na hora
+document.querySelectorAll('input[name^=grupo_nome__]').forEach(i => i.addEventListener('input', () => {
+  document.getElementById('tabnome-' + i.dataset.g).textContent = i.value || '(sem nome)';
+}));
+// Enter no nome do novo grupo cria o grupo (e não "salvar valores")
+document.querySelector('input[name=novo_grupo_nome]').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); document.querySelector('button[value=add_grupo]').click(); }
 });
+document.querySelectorAll('.tabela-edit input, .tabela-edit textarea, .tabela-edit select, .grupo-nome input').forEach(el => {
+  const ini = el.value; const f = () => el.classList.toggle('changed', el.value !== ini);
+  el.addEventListener('input', f); el.addEventListener('change', f);
+});
+window.addEventListener('load', ajustarVisiveis); ajustarVisiveis();
 </script>
 {% endblock %}

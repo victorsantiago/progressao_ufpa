@@ -5,7 +5,7 @@
   <div class="tabela-topo sticky-save">
     <button class="btn primary" type="submit">Salvar mapeamento</button>
     <div class="actions">
-      <input type="search" id="busca" placeholder="Filtrar itens do Lattes…" class="busca">
+      <input type="search" id="busca" placeholder="Filtrar por item ou tag do Lattes…" class="busca">
       <button class="btn" type="submit" name="acao" value="restaurar" onclick="return confirm('Restaurar o mapeamento padrão?')">Restaurar padrão</button>
     </div>
   </div>
@@ -14,8 +14,8 @@
       <thead><tr><th style="width:42%">Item do Lattes</th><th>Item da tabela</th></tr></thead>
       <tbody>
       {% for c in cats %}
-        <tr class="map-row" data-busca="{{ c.label|lower }}">
-          <td>{{ c.label }}</td>
+        <tr class="map-row" data-busca="{{ (c.label ~ ' ' ~ c.tags)|lower }}">
+          <td>{{ c.label }}<span class="tag-xml" title="Caminho no XML do Lattes">{{ c.tags }}</span></td>
           <td>
             <select name="map__{{ c.key }}" class="sel {{ 'sem-item' if not c.atual }}">
               <option value="">— não pontua —</option>

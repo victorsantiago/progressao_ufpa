@@ -354,7 +354,7 @@ def _registro(rec):
     return {"desc": str(rec), "qtd": 1.0, "ini": None, "fim": None}  # formato antigo
 
 
-def calcular_pontuacao(categorias_qtd, itens_por_key, mapeamento, ano_ini=None, ano_fim=None, grupos=None):
+def calcular_pontuacao(categorias_qtd, itens_por_key, mapeamento, ano_ini=None, ano_fim=None, grupos=None, todos_grupos=None):
     """
     categorias_qtd: {categoria_key: {"qtd": float, "registros": [{"desc","qtd","ini","fim"}]}}
     itens_por_key: {item_key: {"valor": float, "atividade": str, "grupo": str, ...}}
@@ -366,10 +366,11 @@ def calcular_pontuacao(categorias_qtd, itens_por_key, mapeamento, ano_ini=None, 
     filtro = ano_ini is not None or ano_fim is not None
     lo = ano_ini if ano_ini is not None else -10**9
     hi = ano_fim if ano_fim is not None else 10**9
-    grupos = set(grupos) if grupos is not None else set(GRUPOS)
+    ordem = list(todos_grupos) if todos_grupos is not None else list(GRUPOS)
+    grupos = set(grupos) if grupos is not None else set(ordem)
 
     linhas = []
-    totais_grupo = {g: 0.0 for g in GRUPOS}
+    totais_grupo = {g: 0.0 for g in ordem}
     total = 0.0
     for cat in CATEGORIAS:
         ckey = cat[0]
@@ -409,7 +410,7 @@ def calcular_pontuacao(categorias_qtd, itens_por_key, mapeamento, ano_ini=None, 
         incluido = grupo in grupos
         pontos = qtd * valor if item else 0.0
         if item:
-            totais_grupo[grupo] += pontos
+            totais_grupo[grupo] = totais_grupo.get(grupo, 0.0) + pontos
             if incluido:
                 total += pontos
         linhas.append({
@@ -429,4 +430,113 @@ def calcular_pontuacao(categorias_qtd, itens_por_key, mapeamento, ano_ini=None, 
             "registros_fora": fora,
         })
     return {"linhas": linhas, "totais_grupo": totais_grupo, "total": total,
-            "grupos": sorted(grupos, key=list(GRUPOS).index), "ano_ini": ano_ini, "ano_fim": ano_fim, "filtro": filtro}
+            "grupos": [g for g in ordem if g in grupos], "ano_ini": ano_ini, "ano_fim": ano_fim, "filtro": filtro}
+
+
+# ---------------------------------------------------------------------------
+# De onde cada item do Lattes vem no XML (exibido na tela de Mapeamento)
+# ---------------------------------------------------------------------------
+_FA = "DADOS-GERAIS › FORMACAO-ACADEMICA-TITULACAO › "
+_FC = "DADOS-COMPLEMENTARES › FORMACAO-COMPLEMENTAR › "
+_EV = "DADOS-COMPLEMENTARES › PARTICIPACAO-EM-EVENTOS-CONGRESSOS › PARTICIPACAO-EM-* (congresso, seminário, simpósio, oficina, encontro, outras)"
+_OC = "OUTRA-PRODUCAO › ORIENTACOES-CONCLUIDAS › "
+_OA = "DADOS-COMPLEMENTARES › ORIENTACOES-EM-ANDAMENTO › "
+_BT = "DADOS-COMPLEMENTARES › PARTICIPACAO-EM-BANCA-TRABALHOS-CONCLUSAO › "
+_BJ = "DADOS-COMPLEMENTARES › PARTICIPACAO-EM-BANCA-JULGADORA › "
+_PJ = "ATUACAO-PROFISSIONAL › … › PROJETO-DE-PESQUISA"
+_PB = "PRODUCAO-BIBLIOGRAFICA › "
+_PT = "PRODUCAO-TECNICA › "
+_DT = "PRODUCAO-TECNICA › DEMAIS-TIPOS-DE-PRODUCAO-TECNICA › "
+_AP = "DADOS-GERAIS › ATUACOES-PROFISSIONAIS › ATUACAO-PROFISSIONAL › "
+
+CATEGORIA_TAGS = {
+    "form_doutorado": _FA + "DOUTORADO ou LIVRE-DOCENCIA (STATUS-DO-CURSO=CONCLUIDO)",
+    "form_mestrado": _FA + "MESTRADO ou MESTRADO-PROFISSIONALIZANTE (STATUS-DO-CURSO=CONCLUIDO)",
+    "form_posdoc": _FA + "POS-DOUTORADO (STATUS-DO-CURSO=CONCLUIDO)",
+    "form_especializacao": _FA + "ESPECIALIZACAO (STATUS-DO-CURSO=CONCLUIDO)",
+    "form_curso_curta": _FC + "FORMACAO-COMPLEMENTAR-CURSO-DE-CURTA-DURACAO",
+    "form_outros": _FC + "OUTROS (e demais formações complementares)",
+    "evento_participante": _EV + " — TIPO-PARTICIPACAO vazio ou ouvinte/participante",
+    "evento_palestrante": _EV + " — TIPO-PARTICIPACAO contém conferencista, palestrante, moderador, mesa, debatedor ou coordenador",
+    "orient_posdoc_concl": _OC + "ORIENTACOES-CONCLUIDAS-PARA-POS-DOUTORADO",
+    "orient_doutorado_concl": _OC + "ORIENTACOES-CONCLUIDAS-PARA-DOUTORADO (TIPO-DE-ORIENTACAO=ORIENTADOR_PRINCIPAL)",
+    "orient_mestrado_concl": _OC + "ORIENTACOES-CONCLUIDAS-PARA-MESTRADO (TIPO-DE-ORIENTACAO=ORIENTADOR_PRINCIPAL)",
+    "coorient_doutorado_concl": _OC + "ORIENTACOES-CONCLUIDAS-PARA-DOUTORADO (TIPO-DE-ORIENTACAO=CO_ORIENTADOR)",
+    "coorient_mestrado_concl": _OC + "ORIENTACOES-CONCLUIDAS-PARA-MESTRADO (TIPO-DE-ORIENTACAO=CO_ORIENTADOR)",
+    "orient_especializacao_concl": _OC + "OUTRAS-ORIENTACOES-CONCLUIDAS (NATUREZA de especialização/aperfeiçoamento)",
+    "orient_tcc_concl": _OC + "OUTRAS-ORIENTACOES-CONCLUIDAS (NATUREZA=TRABALHO_DE_CONCLUSAO_DE_CURSO_GRADUACAO)",
+    "orient_ic_concl": _OC + "OUTRAS-ORIENTACOES-CONCLUIDAS (NATUREZA=INICIACAO_CIENTIFICA)",
+    "orient_outra_concl": _OC + "OUTRAS-ORIENTACOES-CONCLUIDAS (demais NATUREZA)",
+    "orient_posdoc_and": _OA + "ORIENTACAO-EM-ANDAMENTO-DE-POS-DOUTORADO",
+    "orient_doutorado_and": _OA + "ORIENTACAO-EM-ANDAMENTO-DE-DOUTORADO",
+    "orient_mestrado_and": _OA + "ORIENTACAO-EM-ANDAMENTO-DE-MESTRADO",
+    "orient_tcc_and": _OA + "ORIENTACAO-EM-ANDAMENTO-DE-GRADUACAO",
+    "orient_ic_and": _OA + "ORIENTACAO-EM-ANDAMENTO-DE-INICIACAO-CIENTIFICA",
+    "orient_outra_and": _OA + "ORIENTACAO-EM-ANDAMENTO-DE-* (demais)",
+    "banca_doutorado": _BT + "PARTICIPACAO-EM-BANCA-DE-DOUTORADO",
+    "banca_mestrado": _BT + "PARTICIPACAO-EM-BANCA-DE-MESTRADO",
+    "banca_qualificacao": _BT + "PARTICIPACAO-EM-BANCA-DE-EXAME-QUALIFICACAO",
+    "banca_especializacao": _BT + "PARTICIPACAO-EM-BANCA-DE-APERFEICOAMENTO-ESPECIALIZACAO",
+    "banca_graduacao": _BT + "PARTICIPACAO-EM-BANCA-DE-GRADUACAO",
+    "banca_concurso": _BJ + "BANCA-JULGADORA-PARA-CONCURSO-PUBLICO",
+    "banca_livre_docencia": _BJ + "BANCA-JULGADORA-PARA-LIVRE-DOCENCIA",
+    "banca_prof_titular": _BJ + "BANCA-JULGADORA-PARA-PROFESSOR-TITULAR",
+    "banca_avaliacao_cursos": _BJ + "BANCA-JULGADORA-PARA-AVALIACAO-CURSOS",
+    "banca_outra": _BJ + "OUTRAS-BANCAS-JULGADORAS",
+    "proj_pesquisa_coord_sem_fin": _PJ + " (NATUREZA=PESQUISA/DESENVOLVIMENTO; docente com FLAG-RESPONSAVEL=SIM; sem FINANCIADOR-DO-PROJETO)",
+    "proj_pesquisa_coord_fin_int": _PJ + " (NATUREZA=PESQUISA/DESENVOLVIMENTO; FLAG-RESPONSAVEL=SIM; financiador UFPA/PROPESP/PROEX)",
+    "proj_pesquisa_coord_fin_ext": _PJ + " (NATUREZA=PESQUISA/DESENVOLVIMENTO; FLAG-RESPONSAVEL=SIM; outro financiador)",
+    "proj_pesquisa_part_sem_fin": _PJ + " (NATUREZA=PESQUISA/DESENVOLVIMENTO; integrante; sem FINANCIADOR-DO-PROJETO)",
+    "proj_pesquisa_part_fin_int": _PJ + " (NATUREZA=PESQUISA/DESENVOLVIMENTO; integrante; financiador UFPA/PROPESP/PROEX)",
+    "proj_pesquisa_part_fin_ext": _PJ + " (NATUREZA=PESQUISA/DESENVOLVIMENTO; integrante; outro financiador)",
+    "proj_extensao_coord": _PJ + " (NATUREZA=EXTENSAO; FLAG-RESPONSAVEL=SIM)",
+    "proj_extensao_part": _PJ + " (NATUREZA=EXTENSAO; integrante)",
+    "proj_ensino_coord": _PJ + " (NATUREZA=ENSINO; FLAG-RESPONSAVEL=SIM)",
+    "proj_ensino_part": _PJ + " (NATUREZA=ENSINO; integrante)",
+    "proj_outro": _PJ + " (demais NATUREZA)",
+    "artigo_internacional": _PB + "ARTIGOS-PUBLICADOS › ARTIGO-PUBLICADO (IDIOMA diferente de Português)",
+    "artigo_nacional": _PB + "ARTIGOS-PUBLICADOS › ARTIGO-PUBLICADO (IDIOMA=Português)",
+    "livro_publicado": _PB + "LIVROS-E-CAPITULOS › LIVRO-PUBLICADO-OU-ORGANIZADO (TIPO=LIVRO_PUBLICADO)",
+    "livro_organizado_internacional": _PB + "LIVROS-E-CAPITULOS › LIVRO-PUBLICADO-OU-ORGANIZADO (organizado; PAIS-DE-PUBLICACAO fora do Brasil)",
+    "livro_organizado_nacional": _PB + "LIVROS-E-CAPITULOS › LIVRO-PUBLICADO-OU-ORGANIZADO (organizado; PAIS-DE-PUBLICACAO=Brasil)",
+    "capitulo_internacional": _PB + "LIVROS-E-CAPITULOS › CAPITULO-DE-LIVRO-PUBLICADO (PAIS-DE-PUBLICACAO fora do Brasil)",
+    "capitulo_nacional": _PB + "LIVROS-E-CAPITULOS › CAPITULO-DE-LIVRO-PUBLICADO (PAIS-DE-PUBLICACAO=Brasil)",
+    "trabalho_evento_completo": _PB + "TRABALHOS-EM-EVENTOS › TRABALHO-EM-EVENTOS (NATUREZA=COMPLETO/RESUMO_EXPANDIDO; evento nacional ou internacional)",
+    "trabalho_evento_regional": _PB + "TRABALHOS-EM-EVENTOS › TRABALHO-EM-EVENTOS (NATUREZA=COMPLETO/RESUMO_EXPANDIDO; CLASSIFICACAO-DO-EVENTO=REGIONAL/LOCAL)",
+    "resumo_evento": _PB + "TRABALHOS-EM-EVENTOS › TRABALHO-EM-EVENTOS (NATUREZA=RESUMO)",
+    "texto_jornal": _PB + "TEXTOS-EM-JORNAIS-OU-REVISTAS › TEXTO-EM-JORNAL-OU-REVISTA",
+    "prefacio_posfacio": _PB + "DEMAIS-TIPOS-DE-PRODUCAO-BIBLIOGRAFICA › PREFACIO-POSFACIO",
+    "traducao": _PB + "DEMAIS-TIPOS-DE-PRODUCAO-BIBLIOGRAFICA › TRADUCAO",
+    "outra_prod_bibliografica": _PB + "DEMAIS-TIPOS-DE-PRODUCAO-BIBLIOGRAFICA › OUTRA-PRODUCAO-BIBLIOGRAFICA (e demais)",
+    "software_registrado": _PT + "SOFTWARE (com REGISTRO-OU-PATENTE)",
+    "software_sem_registro": _PT + "SOFTWARE (sem REGISTRO-OU-PATENTE)",
+    "patente_concedida": _PT + "PATENTE (REGISTRO-OU-PATENTE com DATA-DE-CONCESSAO)",
+    "patente_depositada": _PT + "PATENTE (sem DATA-DE-CONCESSAO)",
+    "produto_tecnologico": _PT + "PRODUTO-TECNOLOGICO",
+    "processo_tecnica": _PT + "PROCESSOS-OU-TECNICAS",
+    "trabalho_tecnico": _PT + "TRABALHO-TECNICO",
+    "apresentacao_internacional": _DT + "APRESENTACAO-DE-TRABALHO (PAIS fora do Brasil)",
+    "apresentacao_nacional": _DT + "APRESENTACAO-DE-TRABALHO (PAIS=Brasil)",
+    "apresentacao_conferencia": _DT + "APRESENTACAO-DE-TRABALHO (NATUREZA=CONFERENCIA)",
+    "curso_curta_ministrado": _DT + "CURSO-DE-CURTA-DURACAO-MINISTRADO (DURACAO/UNIDADE → blocos de 3 h)",
+    "material_didatico": _DT + "DESENVOLVIMENTO-DE-MATERIAL-DIDATICO-OU-INSTRUCIONAL",
+    "organizacao_evento": _DT + "ORGANIZACAO-DE-EVENTO",
+    "programa_radio_tv": _DT + "PROGRAMA-DE-RADIO-OU-TV",
+    "editoracao": _DT + "EDITORACAO",
+    "relatorio_pesquisa": _DT + "RELATORIO-DE-PESQUISA",
+    "outra_prod_tecnica": _DT + "OUTRA-PRODUCAO-TECNICA (e demais)",
+    "producao_artistica": "OUTRA-PRODUCAO › PRODUCAO-ARTISTICA-CULTURAL › *",
+    "premio_internacional": "DADOS-GERAIS › PREMIOS-TITULOS › PREMIO-TITULO (nome/entidade indicam caráter internacional)",
+    "premio_nacional": "DADOS-GERAIS › PREMIOS-TITULOS › PREMIO-TITULO (demais)",
+    "ensino_graduacao": _AP + "ATIVIDADES-DE-ENSINO › ENSINO (TIPO-ENSINO=GRADUACAO; conta DISCIPLINA)",
+    "ensino_pos": _AP + "ATIVIDADES-DE-ENSINO › ENSINO (TIPO-ENSINO=POS-GRADUACAO; conta DISCIPLINA)",
+    "cargo_direcao": _AP + "ATIVIDADES-DE-DIRECAO-E-ADMINISTRACAO › DIRECAO-E-ADMINISTRACAO",
+    "conselho_comissao": _AP + "ATIVIDADES-DE-CONSELHO-COMISSAO-E-CONSULTORIA › CONSELHO-COMISSAO-E-CONSULTORIA",
+    "revisor_periodico": _AP + "VINCULOS (OUTRO-VINCULO-INFORMADO ou enquadramento contém “revisor”)",
+    "corpo_editorial": _AP + "VINCULOS (vínculo ou enquadramento contém “editorial”)",
+    "estagio_realizado": _AP + "ATIVIDADES-DE-ESTAGIO › ESTAGIO",
+    "treinamento_ministrado": _AP + "ATIVIDADES-DE-TREINAMENTO-MINISTRADO › TREINAMENTO-MINISTRADO",
+}
+assert set(CATEGORIA_TAGS) == set(CATEGORIAS_MAP), set(CATEGORIAS_MAP) ^ set(CATEGORIA_TAGS)
+for _k, _t in CATEGORIA_TAGS.items():
+    CATEGORIAS_MAP[_k]["tags"] = _t

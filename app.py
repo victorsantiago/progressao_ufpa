@@ -23,7 +23,8 @@ import fotos
 from genero import inferir_genero
 from elattes_client import ELattesClient, ELattesError, extrair_xmls
 from lattes_parser import PARSER_VERSAO, parse_lattes_xml
-from scoring import CATEGORIAS, CATEGORIAS_MAP, CONTAGENS, GRUPOS, calcular_pontuacao, tabela_itens
+from scoring import CATEGORIAS, CATEGORIAS_MAP, CONTAGENS, calcular_pontuacao, tabela_itens
+from scoring import GRUPOS as GRUPOS_ANEXO
 
 APP_NOME = "Progressão Automatizada UFPA"
 APP_SUB = "Lattes"
@@ -86,8 +87,11 @@ def init_db():
         atividade TEXT, valor_padrao REAL, valor REAL, ordem INTEGER
     );
     CREATE TABLE IF NOT EXISTS mapeamento (categoria TEXT PRIMARY KEY, item_key TEXT);
+    CREATE TABLE IF NOT EXISTS grupos (codigo TEXT PRIMARY KEY, nome TEXT, ordem INTEGER, original INTEGER DEFAULT 0);
     CREATE TABLE IF NOT EXISTS config (chave TEXT PRIMARY KEY, valor TEXT);
     """)
+    for i, (cod, nome) in enumerate(GRUPOS_ANEXO.items(), 1):
+        con.execute("INSERT OR IGNORE INTO grupos (codigo, nome, ordem, original) VALUES (?,?,?,1)", (cod, nome, i))
     icols = {r["name"] for r in con.execute("PRAGMA table_info(itens)")}
     for col in ("codigo", "contagem"):
         if col not in icols:
@@ -108,7 +112,7 @@ def init_db():
         if col not in cols:
             con.execute(f"ALTER TABLE professores ADD COLUMN {col} TEXT")
     for chave, valor in (("elattes_url", "https://elattes.ufpa.br"), ("interst_ini", ""), ("interst_fim", ""), ("exibir_fotos", "1"),
-                         ("grupos", ",".join(GRUPOS))):
+                         ("grupos", ",".join(GRUPOS_ANEXO))):
         con.execute("INSERT OR IGNORE INTO config (chave, valor) VALUES (?, ?)", (chave, valor))
     con.commit()
     reprocessar_desatualizados(con)
@@ -195,10 +199,34 @@ def status_atualizacao(prof):
 
 
 app.jinja_env.filters["fmt_dt"] = fmt_dt
-app.jinja_env.globals["GRUPOS"] = GRUPOS
 app.jinja_env.globals["status_atualizacao"] = status_atualizacao
 app.jinja_env.globals["APP_NOME"] = APP_NOME
 app.jinja_env.globals["APP_SUB"] = APP_SUB
+
+
+def carregar_grupos(con=None):
+    c = con or get_db()
+    return {r["codigo"]: r["nome"] for r in c.execute("SELECT codigo, nome FROM grupos ORDER BY ordem, rowid")}
+
+
+def G():
+    """Grupos atuais (código → nome), na ordem definida na gestão. Cache por requisição."""
+    if "grupos" not in g:
+        g.grupos = carregar_grupos()
+    return g.grupos
+
+
+ROMANOS = [(1000, "M"), (900, "CM"), (500, "D"), (400, "CD"), (100, "C"), (90, "XC"), (50, "L"), (40, "XL"),
+           (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I")]
+
+
+def romano(n):
+    out = ""
+    for v, r in ROMANOS:
+        while n >= v:
+            out += r
+            n -= v
+    return out
 
 
 def genero_de(prof):
@@ -228,7 +256,7 @@ def logo_path():
 
 @app.context_processor
 def _ctx():
-    return {"tem_logo": logo_path()[0] is not None, "ANO_ATUAL": dt.date.today().year,
+    return {"tem_logo": logo_path()[0] is not None, "ANO_ATUAL": dt.date.today().year, "GRUPOS": G(),
             "fotos_on": cfg("exibir_fotos", "1") == "1"}
 
 
@@ -244,7 +272,7 @@ def _ano(v):
 
 
 def filtros_padrao(con=None):
-    gs = [g for g in (cfg("grupos", ",".join(GRUPOS), con) or "").split(",") if g in GRUPOS]
+    gs = [g for g in (cfg("grupos", ",".join(G()), con) or "").split(",") if g in G()]
     return {"ini": _ano(cfg("interst_ini", "", con)), "fim": _ano(cfg("interst_fim", "", con)), "grupos": gs}
 
 
@@ -255,7 +283,7 @@ def ler_filtros():
     ini, fim = _ano(request.args.get("ini")), _ano(request.args.get("fim"))
     if ini and fim and ini > fim:
         ini, fim = fim, ini
-    grupos = [g for g in request.args.getlist("g") if g in GRUPOS]
+    grupos = [g for g in request.args.getlist("g") if g in G()]
     return {"ini": ini, "fim": fim, "grupos": grupos}
 
 
@@ -274,7 +302,7 @@ def descreve_filtros(fl):
         periodo = f"até {fl['fim']}"
     else:
         periodo = "todo o currículo"
-    if len(fl["grupos"]) == len(GRUPOS):
+    if len(fl["grupos"]) == len(G()):
         gtxt = "todos os grupos"
     elif not fl["grupos"]:
         gtxt = "nenhum grupo"
@@ -432,9 +460,9 @@ def _montar_pontuacao(prof_row, filtros=None, itens=None, mapeamento=None):
     itens = itens if itens is not None else carregar_itens()
     itens_por_key = {i["key"]: i for i in itens}
     mapeamento = mapeamento if mapeamento is not None else carregar_mapeamento()
-    fl = filtros or {"ini": None, "fim": None, "grupos": list(GRUPOS)}
+    fl = filtros or {"ini": None, "fim": None, "grupos": list(G())}
     pont = calcular_pontuacao(parsed["categorias"], itens_por_key, mapeamento,
-                              ano_ini=fl["ini"], ano_fim=fl["fim"], grupos=fl["grupos"])
+                              ano_ini=fl["ini"], ano_fim=fl["fim"], grupos=fl["grupos"], todos_grupos=list(G()))
     return parsed, pont, itens
 
 
@@ -447,9 +475,9 @@ def professor(pid):
     fl = ler_filtros()
     parsed, pont, _ = _montar_pontuacao(prof, fl)
     pontos_cat = {l["categoria"]: l for l in pont["linhas"]}
-    por_grupo = {g: [l for l in pont["linhas"] if l["grupo"] == g] for g in GRUPOS}
+    por_grupo = {g: [l for l in pont["linhas"] if l["grupo"] == g] for g in G()}
     grupo_ativo = request.args.get("grupo")
-    if grupo_ativo not in GRUPOS:
+    if grupo_ativo not in G():
         # primeiro grupo considerado que tenha pontos; senão o primeiro considerado; senão I
         grupo_ativo = next((g for g in fl["grupos"] if pont["totais_grupo"][g] > 0),
                            fl["grupos"][0] if fl["grupos"] else "I")
@@ -643,43 +671,128 @@ def admin_importar_arquivo():
 def admin_tabela():
     db = get_db()
     if request.method == "POST":
-        if request.form.get("acao") == "restaurar":
+        acao = request.form.get("acao") or "salvar"
+        destino = request.form.get("grupo") or None
+        if acao == "restaurar":
+            for i, (cod, nome) in enumerate(GRUPOS_ANEXO.items(), 1):
+                db.execute("INSERT OR IGNORE INTO grupos (codigo, nome, ordem, original) VALUES (?,?,?,1)", (cod, nome, i))
+                db.execute("UPDATE grupos SET nome=? WHERE codigo=?", (nome, cod))
             for it in tabela_itens():
-                db.execute("UPDATE itens SET codigo=?, atividade=?, contagem=?, valor=? WHERE key=?",
-                           (it["codigo"], it["atividade"], it["contagem_padrao"], it["valor_padrao"], it["key"]))
-            flash("Tabela restaurada para o Anexo I original (item, atividade, contagem e valor).", "ok")
+                db.execute("INSERT OR IGNORE INTO itens (key, codigo, grupo, numero, variante, atividade, contagem, valor_padrao, valor, ordem) "
+                           "VALUES (?,?,?,?,?,?,?,?,?,?)",
+                           (it["key"], it["codigo"], it["grupo"], it["numero"], it["variante"], it["atividade"],
+                            it["contagem_padrao"], it["valor_padrao"], it["valor_padrao"], it["ordem"]))
+                db.execute("UPDATE itens SET codigo=?, atividade=?, contagem=?, valor=?, grupo=? WHERE key=?",
+                           (it["codigo"], it["atividade"], it["contagem_padrao"], it["valor_padrao"], it["grupo"], it["key"]))
+            flash("Grupos e itens do Anexo I restaurados (nome, item, atividade, contagem e valor). "
+                  "Grupos e itens criados por você foram mantidos.", "ok")
         else:
-            n = 0
-            for it in carregar_itens(db):
-                k = it["key"]
-                if f"valor__{k}" not in request.form:
-                    continue
-                try:
-                    val = float((request.form.get(f"valor__{k}") or "0").replace(",", "."))
-                except ValueError:
-                    val = it["valor"]
-                codigo = (request.form.get(f"codigo__{k}") or "").strip() or it["codigo"] or k
-                atividade = (request.form.get(f"atividade__{k}") or "").strip() or it["atividade"]
-                contagem = request.form.get(f"contagem__{k}")
-                contagem = contagem if contagem in CONTAGENS else (it["contagem"] or "registro")
-                if (val, codigo, atividade, contagem) != (it["valor"], it["codigo"], it["atividade"], it["contagem"]):
-                    db.execute("UPDATE itens SET valor=?, codigo=?, atividade=?, contagem=? WHERE key=?",
-                               (val, codigo, atividade, contagem, k))
-                    n += 1
-            flash(f"{n} item(ns) alterado(s)." if n else "Nenhuma alteração.", "ok")
+            n = _salvar_edicoes_tabela(db)
+            msg = f"{n} alteração(ões) salva(s)." if n else ""
+            if acao.startswith("add_item:"):
+                grp = acao.split(":", 1)[1]
+                if grp in carregar_grupos(db):
+                    _adicionar_item(db, grp)
+                    destino = grp
+                    msg = (msg + " Item adicionado no fim do grupo.").strip()
+            elif acao.startswith("del_item:"):
+                key = acao.split(":", 1)[1]
+                row = db.execute("SELECT codigo, grupo FROM itens WHERE key=?", (key,)).fetchone()
+                if row:
+                    db.execute("DELETE FROM itens WHERE key=?", (key,))
+                    db.execute("UPDATE mapeamento SET item_key=NULL WHERE item_key=?", (key,))
+                    destino = row["grupo"]
+                    msg = (msg + f" Item {row['codigo']} removido.").strip()
+            elif acao == "add_grupo":
+                nome = (request.form.get("novo_grupo_nome") or "").strip()
+                if not nome:
+                    flash("Informe o nome do novo grupo.", "erro")
+                else:
+                    destino = _adicionar_grupo(db, nome)
+                    msg = (msg + f" Grupo {destino} criado.").strip()
+            elif acao.startswith("del_grupo:"):
+                cod = acao.split(":", 1)[1]
+                row = db.execute("SELECT original FROM grupos WHERE codigo=?", (cod,)).fetchone()
+                if row and not row["original"]:
+                    keys = [r["key"] for r in db.execute("SELECT key FROM itens WHERE grupo=?", (cod,))]
+                    for k in keys:
+                        db.execute("UPDATE mapeamento SET item_key=NULL WHERE item_key=?", (k,))
+                    db.execute("DELETE FROM itens WHERE grupo=?", (cod,))
+                    db.execute("DELETE FROM grupos WHERE codigo=?", (cod,))
+                    padrao = [x for x in (cfg("grupos", "", db) or "").split(",") if x and x != cod]
+                    db.execute("UPDATE config SET valor=? WHERE chave='grupos'", (",".join(padrao),))
+                    destino = None
+                    msg = (msg + f" Grupo {cod} removido.").strip()
+            if msg:
+                flash(msg, "ok")
         db.commit()
-        return redirect(url_for("admin_tabela", grupo=request.form.get("grupo") or None))
+        return redirect(url_for("admin_tabela", grupo=destino))
+    grupos = carregar_grupos(db)
+    originais = {r["codigo"] for r in db.execute("SELECT codigo FROM grupos WHERE original=1")}
     itens = carregar_itens(db)
-    por_grupo = {g: [i for i in itens if i["grupo"] == g] for g in GRUPOS}
-    # categorias mapeadas para cada item (para mostrar o que o Lattes alimenta)
+    por_grupo = {g_: [i for i in itens if i["grupo"] == g_] for g_ in grupos}
     mapa = carregar_mapeamento(db)
     cats_por_item = {}
     for c, k in mapa.items():
         if k:
             cats_por_item.setdefault(k, []).append(CATEGORIAS_MAP[c]["label"])
-    grupo_ativo = request.args.get("grupo") if request.args.get("grupo") in GRUPOS else "I"
-    return render_template("admin_tabela.html", por_grupo=por_grupo, cats_por_item=cats_por_item,
-                           CONTAGENS=CONTAGENS, grupo_ativo=grupo_ativo)
+    grupo_ativo = request.args.get("grupo") if request.args.get("grupo") in grupos else next(iter(grupos), "")
+    return render_template("admin_tabela.html", por_grupo=por_grupo, cats_por_item=cats_por_item, GRUPOS=grupos,
+                           originais=originais, CONTAGENS=CONTAGENS, grupo_ativo=grupo_ativo)
+
+
+def _salvar_edicoes_tabela(db):
+    """Grava nomes de grupos e campos dos itens enviados no formulário. Retorna o nº de alterações."""
+    n = 0
+    for cod, nome in carregar_grupos(db).items():
+        novo = (request.form.get(f"grupo_nome__{cod}") or "").strip()
+        if novo and novo != nome:
+            db.execute("UPDATE grupos SET nome=? WHERE codigo=?", (novo, cod))
+            n += 1
+    for it in carregar_itens(db):
+        k = it["key"]
+        if f"valor__{k}" not in request.form:
+            continue
+        try:
+            val = float((request.form.get(f"valor__{k}") or "0").replace(",", "."))
+        except ValueError:
+            val = it["valor"]
+        codigo = (request.form.get(f"codigo__{k}") or "").strip() or it["codigo"] or k
+        atividade = (request.form.get(f"atividade__{k}") or "").strip() or it["atividade"]
+        contagem = request.form.get(f"contagem__{k}")
+        contagem = contagem if contagem in CONTAGENS else (it["contagem"] or "registro")
+        if (val, codigo, atividade, contagem) != (it["valor"], it["codigo"], it["atividade"], it["contagem"]):
+            db.execute("UPDATE itens SET valor=?, codigo=?, atividade=?, contagem=? WHERE key=?",
+                       (val, codigo, atividade, contagem, k))
+            n += 1
+    return n
+
+
+def _adicionar_item(db, grp):
+    codigos = {r["codigo"] for r in db.execute("SELECT codigo FROM itens WHERE grupo=?", (grp,))}
+    n = len(codigos) + 1
+    while f"{grp}.{n}" in codigos:
+        n += 1
+    ordem = (db.execute("SELECT MAX(ordem) m FROM itens").fetchone()["m"] or 0) + 1
+    db.execute("INSERT INTO itens (key, codigo, grupo, numero, variante, atividade, contagem, valor_padrao, valor, ordem) "
+               "VALUES (?,?,?,?,?,?,?,?,?,?)",
+               (f"U{uuid.uuid4().hex[:10]}", f"{grp}.{n}", grp, n, "", "Nova atividade — edite o texto", "registro", 0, 0, ordem))
+
+
+def _adicionar_grupo(db, nome):
+    existentes = set(carregar_grupos(db))
+    i = len(existentes) + 1
+    while romano(i) in existentes:
+        i += 1
+    cod = romano(i)
+    ordem = (db.execute("SELECT MAX(ordem) m FROM grupos").fetchone()["m"] or 0) + 1
+    db.execute("INSERT INTO grupos (codigo, nome, ordem, original) VALUES (?,?,?,0)", (cod, nome, ordem))
+    padrao = [x for x in (cfg("grupos", "", db) or "").split(",") if x]
+    if cod not in padrao:
+        padrao.append(cod)  # grupo novo entra na análise padrão
+        db.execute("UPDATE config SET valor=? WHERE chave='grupos'", (",".join(padrao),))
+    _adicionar_item(db, cod)
+    return cod
 
 
 @app.route("/admin/mapeamento", methods=["GET", "POST"])
@@ -720,7 +833,7 @@ def admin_config():
                 ini, fim = fim, ini
             salvar("interst_ini", str(ini or ""))
             salvar("interst_fim", str(fim or ""))
-            salvar("grupos", ",".join(g for g in request.form.getlist("g") if g in GRUPOS))
+            salvar("grupos", ",".join(g for g in request.form.getlist("g") if g in G()))
             flash("Análise padrão salva.", "ok")
         elif acao == "logo":
             arq = request.files.get("logo")
@@ -835,11 +948,11 @@ def admin_exportar():
     w = csv.writer(out, delimiter=";")
     w.writerow([descreve_filtros(fl)])
     w.writerow(["id_lattes", "nome", "atualizacao_lattes", "importado_em", "status"]
-               + [f"Grupo {g}{'' if g in fl['grupos'] else ' (fora da análise)'}" for g in GRUPOS] + ["Total considerado"])
+               + [f"Grupo {g}{'' if g in fl['grupos'] else ' (fora da análise)'}" for g in G()] + ["Total considerado"])
     for p in profs:
         _, pont, _ = _montar_pontuacao(p, fl, itens, mapa)
         w.writerow([p["id"], p["nome"], p["data_atualizacao_br"], fmt_dt(p["importado_em"]), status_atualizacao(p)]
-                   + [f"{pont['totais_grupo'][g]:.1f}".replace(".", ",") for g in GRUPOS] + [f"{pont['total']:.1f}".replace(".", ",")])
+                   + [f"{pont['totais_grupo'][g]:.1f}".replace(".", ",") for g in G()] + [f"{pont['total']:.1f}".replace(".", ",")])
     sufixo = f"_{fl['ini'] or 'inicio'}-{fl['fim'] or 'atual'}" if (fl["ini"] or fl["fim"]) else ""
     return app.response_class(out.getvalue().encode("utf-8-sig"), mimetype="text/csv",
                               headers={"Content-Disposition": f"attachment; filename=pontuacao_professores{sufixo}.csv"})

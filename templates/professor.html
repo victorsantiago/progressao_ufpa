@@ -87,9 +87,9 @@
     {% for g, nome in GRUPOS.items() %}
     {% set inc = g in fl.grupos %}
     <button type="button" role="tab" class="gtab {{ 'active' if g == grupo_ativo }} {{ '' if inc else 'excluido' }}" data-g="{{ g }}" title="{{ nome }}{{ '' if inc else ' — fora da análise' }}">
-      <span class="gt-g">Grupo {{ g }}</span>
-      <span class="gt-v">{{ '%.1f'|format(pont.totais_grupo[g]) }}</span>
-      <span class="gt-n">{{ 'fora da análise' if not inc else nome }}</span>
+      <span class="gt-g">Grupo {{ g }}{% if not inc %} · fora da análise{% endif %}</span>
+      <span class="gt-v">{{ '%.1f'|format(pont.totais_grupo.get(g, 0)) }} <small>pts</small></span>
+      <span class="gt-nome">{{ nome }}</span>
     </button>
     {% endfor %}
   </div>
@@ -98,7 +98,7 @@
   {% set linhas = por_grupo[g] %}
   {% set inc = g in fl.grupos %}
   <div class="gpanel box {{ 'active' if g == grupo_ativo }} {{ '' if inc else 'grupo-off' }}" id="gpanel-{{ g }}" role="tabpanel">
-    <h3>Grupo {{ g }} — {{ nome }} <span class="count">{{ '%.1f'|format(pont.totais_grupo[g]) }} pts</span>{% if not inc %} <span class="pill desconhecido">fora da análise — não soma no total</span>{% endif %}</h3>
+    <h3>Grupo {{ g }} — {{ nome }} <span class="count">{{ '%.1f'|format(pont.totais_grupo.get(g, 0)) }} pts</span>{% if not inc %} <span class="pill desconhecido">fora da análise — não soma no total</span>{% endif %}</h3>
     {% if not linhas %}<p class="muted">Nenhum item do Lattes neste grupo.</p>{% else %}
     <table class="tabela">
       <thead><tr><th>Item do Lattes</th><th>Item da tabela</th><th class="num">Qtd.</th><th class="num">Valor</th><th class="num">Pontos</th></tr></thead>
